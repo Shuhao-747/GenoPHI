@@ -196,16 +196,31 @@ def select_best_hits(assigned_tsv, best_hits_tsv, clusters_tsv):
         clusters_tsv (str): Path to the clusters TSV file.
     """
     logging.info("Selecting best hits...")
-    
+
+    # Read the assigned clusters file and ensure the correct column names
     assigned_df = pd.read_csv(assigned_tsv, sep='\t', header=None, names=[
         'Query', 'Target', 'Score', 'SeqIdentity', 'E-value', 'qStartPos', 'qEndPos', 'qLen', 'tStartPos', 'tEndPos', 'tLen'
     ])
+
+    # Sort by Query, then by SeqIdentity and E-value to find the best hits
     assigned_df = assigned_df.sort_values(by=['Query', 'SeqIdentity', 'E-value'], ascending=[True, False, True])
+
+    # Drop duplicates to keep the best hit for each Query
     best_hits_df = assigned_df.drop_duplicates(subset=['Query'], keep='first')
 
+    # Read the clusters TSV and ensure the columns are correctly named
     clusters_df = pd.read_csv(clusters_tsv, sep='\t', header=None, names=['Cluster', 'Contig'])
+
+    # Ensure both columns being merged on are strings to avoid type mismatch
+    best_hits_df['Target'] = best_hits_df['Target'].astype(str)
+    clusters_df['Contig'] = clusters_df['Contig'].astype(str)
+
+    # Merge best hits with clusters to map the target sequences to clusters
     best_hits_df = pd.merge(best_hits_df, clusters_df, left_on='Target', right_on='Contig', how='left')
+
+    # Save the final result with only the Query and Cluster columns
     best_hits_df[['Query', 'Cluster']].to_csv(best_hits_tsv, sep='\t', index=False, header=False)
+
     logging.info(f"Best hits saved to {best_hits_tsv}")
 
 def generate_presence_absence_matrix(best_hits_tsv, output_csv_path, contig_to_genome, genome_list):

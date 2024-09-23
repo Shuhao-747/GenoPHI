@@ -4,7 +4,7 @@ from phage_modeling.mmseqs2_clustering import run_clustering_workflow, run_featu
 from phage_modeling.feature_selection import run_feature_selection_iterations, generate_feature_tables
 from phage_modeling.select_feature_modeling import run_experiments
 
-def run_full_workflow(input_path_strain, input_path_phage, interaction_matrix, output_dir, tmp_dir="tmp", min_seq_id=0.6, coverage=0.8, sensitivity=7.5, suffix='faa', threads=4, strain_list='none', strain_column='strain', compare=False, source_strain='strain', source_phage='phage', num_features=100, filter_type='none', num_runs_fs=10, num_runs_modeling=10, sample_column=None, phenotype_column=None):
+def run_full_workflow(input_path_strain, input_path_phage, interaction_matrix, output_dir, tmp_dir="tmp", min_seq_id=0.6, coverage=0.8, sensitivity=7.5, suffix='faa', threads=4, strain_list='none', phage_list='none', strain_column='strain', phage_column='phage', compare=False, source_strain='strain', source_phage='phage', num_features=100, filter_type='none', num_runs_fs=10, num_runs_modeling=10, sample_column=None, phenotype_column=None):
     """
     Complete workflow: Feature table generation, feature selection, and modeling.
 
@@ -20,7 +20,9 @@ def run_full_workflow(input_path_strain, input_path_phage, interaction_matrix, o
         suffix (str): Suffix for input FASTA files.
         threads (int): Number of threads to use.
         strain_list (str or None): Path to a strain list file, or None for no filtering.
+        phage_list (str or None): Path to a phage list file, or None for no filtering.
         strain_column (str): Column in the strain list file containing strain names.
+        phage_column (str): Column in the phage list file containing phage names.
         compare (bool): Whether to compare original clusters with assigned clusters.
         source_strain (str): Prefix for naming selected features for strain in the assignment step.
         source_phage (str): Prefix for naming selected features for phage in the assignment step.
@@ -47,11 +49,11 @@ def run_full_workflow(input_path_strain, input_path_phage, interaction_matrix, o
 
     # Run clustering and feature assignment for strain
     run_clustering_workflow(input_path_strain, strain_output_dir, strain_tmp_dir, min_seq_id, coverage, sensitivity, suffix, threads, strain_list, strain_column, compare)
-    run_feature_assignment(os.path.join(strain_output_dir, "presence_absence_matrix.csv"), os.path.join(strain_output_dir, "features"), source=source_strain, select=strain_list, select_column='strain')
+    run_feature_assignment(os.path.join(strain_output_dir, "presence_absence_matrix.csv"), os.path.join(strain_output_dir, "features"), source=source_strain, select=strain_list, select_column=strain_column)
 
     # Run clustering and feature assignment for phage
-    run_clustering_workflow(input_path_phage, phage_output_dir, phage_tmp_dir, min_seq_id, coverage, sensitivity, suffix, threads, strain_list, strain_column, compare)
-    run_feature_assignment(os.path.join(phage_output_dir, "presence_absence_matrix.csv"), os.path.join(phage_output_dir, "features"), source=source_phage, select=strain_list, select_column='phage')
+    run_clustering_workflow(input_path_phage, phage_output_dir, phage_tmp_dir, min_seq_id, coverage, sensitivity, suffix, threads, phage_list, phage_column, compare)
+    run_feature_assignment(os.path.join(phage_output_dir, "presence_absence_matrix.csv"), os.path.join(phage_output_dir, "features"), source=source_phage, select=phage_list, select_column=phage_column)
 
     # Merge strain and phage feature tables
     merged_feature_table = merge_feature_tables(
@@ -77,12 +79,13 @@ def run_full_workflow(input_path_strain, input_path_phage, interaction_matrix, o
     )
     
     # Generate feature tables from feature selection
+    print("Generating feature tables from feature selection results...")
     filter_table_dir = os.path.join(base_fs_output_dir, 'filtered_feature_tables')
     generate_feature_tables(
         model_testing_dir=base_fs_output_dir,
         full_feature_table_file=merged_feature_table,
         filter_table_dir=filter_table_dir,
-        cut_offs=[3, 5, 7, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+        cut_offs=[3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 17, 20, 22, 25, 27, 30, 32, 35, 37, 40, 42, 45, 47, 50]
     )
 
     # Step 3: Modeling
@@ -111,7 +114,9 @@ def main():
     parser.add_argument('--suffix', type=str, default='faa', help='Suffix for input FASTA files (default: faa).')
     parser.add_argument('--threads', type=int, default=4, help='Number of threads to use (default: 4).')
     parser.add_argument('--strain_list', type=str, default='none', help='Path to a strain list file for filtering (default: none).')
+    parser.add_argument('--phage_list', type=str, default='none', help='Path to a phage list file for filtering (default: none).')
     parser.add_argument('--strain_column', type=str, default='strain', help='Column in the strain list containing strain names (default: strain).')
+    parser.add_argument('--phage_column', type=str, default='phage', help='Column in the phage list containing phage names (default: phage).')
     parser.add_argument('--compare', action='store_true', help='Compare original clusters with assigned clusters.')
     parser.add_argument('--source_strain', type=str, default='strain', help='Prefix for naming selected features for strain in the assignment step (default: strain).')
     parser.add_argument('--source_phage', type=str, default='phage', help='Prefix for naming selected features for phage in the assignment step (default: phage).')
@@ -139,7 +144,9 @@ def main():
         suffix=args.suffix,
         threads=args.threads,
         strain_list=args.strain_list,
+        phage_list=args.phage_list,
         strain_column=args.strain_column,
+        phage_column=args.phage_column,
         compare=args.compare,
         source_strain=args.source_strain,
         source_phage=args.source_phage,

@@ -31,7 +31,8 @@ setup(
             'run-modeling-workflow=phage_modeling.workflows.modeling_workflow:main',
             'run-full-workflow=phage_modeling.workflows.full_workflow:main',  # Full workflow
             'run-assign-features-workflow=phage_modeling.workflows.assign_features_workflow:main',  # Optional feature assignment workflow
-            'run-prediction-workflow=phage_modeling.workflows.prediction_workflow:main',  # Optional prediction workflow
+            'run-prediction-workflow=phage_modeling.workflows.prediction_workflow:main',
+            'run-assign-and-predict-workflow=phage_modeling.workflows.assign_predict_workflow:main',
         ],
     },
     classifiers=[

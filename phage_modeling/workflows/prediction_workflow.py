@@ -92,7 +92,7 @@ def calculate_mean_predictions(all_predictions_df):
 
     return mean_conf_df
 
-def run_full_prediction_workflow(input_dir, phage_feature_table_path, model_dir, output_dir, strain_source='strain', phage_source='phage'):
+def run_prediction_workflow(input_dir, phage_feature_table_path, model_dir, output_dir, strain_source='strain', phage_source='phage'):
     """
     Full workflow for predicting phage-strain interactions using multiple models and strain-specific feature tables.
 
@@ -164,8 +164,7 @@ def main():
 
     args = parser.parse_args()
 
-    # Call the workflow function
-    run_full_prediction_workflow(
+    run_prediction_workflow(
         input_dir=args.input_dir,
         phage_feature_table_path=args.phage_feature_table,
         model_dir=args.model_dir,
@@ -176,3 +175,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

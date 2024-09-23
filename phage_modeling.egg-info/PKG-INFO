@@ -1,3 +1,30 @@
+Metadata-Version: 2.1
+Name: phage_modeling
+Version: 0.1.0
+Summary: A package for phage modeling, clustering, and feature assignment using MMseqs2
+Author: Avery Noonan
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Science/Research
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pandas
+Requires-Dist: biopython
+Requires-Dist: scikit-learn
+Requires-Dist: catboost
+Requires-Dist: matplotlib
+Requires-Dist: seaborn
+Requires-Dist: numpy
+Requires-Dist: tqdm
+Requires-Dist: joblib
+Requires-Dist: plotnine
+
 # Phage Modeling
 
 Phage Modeling is a Python package designed to facilitate the machine-learning (ML)-based prediction of phage-host interactions based on gene content of phage and host genomes from amino acid (AA) sequences of protein coding genes and an interaction matrix of experimentally validate phage-host interactions. `phage_modeling` include the following functionalities in its workflows:
@@ -71,62 +98,6 @@ For other installation methods, see the [MMSeqs2 Wiki](https://github.com/soedin
 To run the entire workflow from feature table generation to modeling, you can use the `run-full-workflow` CLI command or call it directly in Python
 
 __CLI__:
-
-Help message:
-
-```bash
-usage: run-full-workflow [-h] -ih INPUT_STRAIN -ip INPUT_PHAGE -im INTERACTION_MATRIX -o OUTPUT [--tmp TMP] [--min_seq_id MIN_SEQ_ID] [--coverage COVERAGE] [--sensitivity SENSITIVITY] [--suffix SUFFIX] [--threads THREADS]
-                         [--strain_list STRAIN_LIST] [--phage_list PHAGE_LIST] [--strain_column STRAIN_COLUMN] [--phage_column PHAGE_COLUMN] [--compare] [--source_strain SOURCE_STRAIN] [--source_phage SOURCE_PHAGE]
-                         [--num_features NUM_FEATURES] [--filter_type FILTER_TYPE] [--num_runs_fs NUM_RUNS_FS] [--num_runs_modeling NUM_RUNS_MODELING] [--sample_column SAMPLE_COLUMN] [--phenotype_column PHENOTYPE_COLUMN]
-
-Run the full workflow: feature table generation, feature selection, and modeling.
-
-options:
-  -h, --help            show this help message and exit
-  -ih INPUT_STRAIN, --input_strain INPUT_STRAIN
-                        Input path for strain clustering (directory or file).
-  -ip INPUT_PHAGE, --input_phage INPUT_PHAGE
-                        Input path for phage clustering (directory or file).
-  -im INTERACTION_MATRIX, --interaction_matrix INTERACTION_MATRIX
-                        Path to the interaction matrix.
-  -o OUTPUT, --output OUTPUT
-                        Output directory to save results.
-  --tmp TMP             Temporary directory for intermediate files (default: tmp).
-  --min_seq_id MIN_SEQ_ID
-                        Minimum sequence identity for clustering (default: 0.6).
-  --coverage COVERAGE   Minimum coverage for clustering (default: 0.8).
-  --sensitivity SENSITIVITY
-                        Sensitivity for clustering (default: 7.5).
-  --suffix SUFFIX       Suffix for input FASTA files (default: faa).
-  --threads THREADS     Number of threads to use (default: 4).
-  --strain_list STRAIN_LIST
-                        Path to a strain list file for filtering (default: none).
-  --phage_list PHAGE_LIST
-                        Path to a phage list file for filtering (default: none).
-  --strain_column STRAIN_COLUMN
-                        Column in the strain list containing strain names (default: strain).
-  --phage_column PHAGE_COLUMN
-                        Column in the phage list containing phage names (default: phage).
-  --compare             Compare original clusters with assigned clusters.
-  --source_strain SOURCE_STRAIN
-                        Prefix for naming selected features for strain in the assignment step (default: strain).
-  --source_phage SOURCE_PHAGE
-                        Prefix for naming selected features for phage in the assignment step (default: phage).
-  --num_features NUM_FEATURES
-                        Number of features to select during feature selection (default: 100).
-  --filter_type FILTER_TYPE
-                        Type of filtering to use during feature selection and modeling ('none', 'strain', 'phage', 'dataset'; default: none).
-  --num_runs_fs NUM_RUNS_FS
-                        Number of feature selection iterations to run (default: 10).
-  --num_runs_modeling NUM_RUNS_MODELING
-                        Number of runs per feature table for modeling (default: 10).
-  --sample_column SAMPLE_COLUMN
-                        Column name for the sample identifier (optional).
-  --phenotype_column PHENOTYPE_COLUMN
-                        Column name for the phenotype (optional).
-```
-
-Example usage:
 
 ```bash
 run-full-workflow --input_host /path/to/host/fasta --input_phage /path/to/phage/fasta --interaction_matrix /path/to/interaction_matrix.csv --output /path/to/output_dir --threads 4 --num_features 100 --num_runs_fs 10 --num_runs_modeling 20
@@ -221,49 +192,6 @@ The `assign_predict` workflow involves assigning new sequences to pre-existing c
 
 __CLI__:
 
-Help message:
-
-```bash
-usage: run-assign-and-predict-workflow [-h] --input_dir INPUT_DIR [--genome_list GENOME_LIST] [--genome_type {strain,phage}] [--genome_column GENOME_COLUMN] --mmseqs_db MMSEQS_DB --clusters_tsv CLUSTERS_TSV --feature_map FEATURE_MAP --tmp_dir
-                                       TMP_DIR [--suffix SUFFIX] --model_dir MODEL_DIR --phage_feature_table PHAGE_FEATURE_TABLE --output_dir OUTPUT_DIR [--sensitivity SENSITIVITY] [--coverage COVERAGE] [--min_seq_id MIN_SEQ_ID]
-                                       [--threads THREADS]
-
-Assign new genes to existing clusters and predict interactions.
-
-options:
-  -h, --help            show this help message and exit
-  --input_dir INPUT_DIR
-                        Directory containing new genome FASTA files.
-  --genome_list GENOME_LIST
-                        CSV file with genome names.
-  --genome_type {strain,phage}
-                        Type of genome to process.
-  --genome_column GENOME_COLUMN
-                        Column name for genome identifiers in genome_list.
-  --mmseqs_db MMSEQS_DB
-                        Path to the existing MMseqs2 database.
-  --clusters_tsv CLUSTERS_TSV
-                        Path to the clusters TSV file.
-  --feature_map FEATURE_MAP
-                        Path to the feature map (selected_features.csv).
-  --tmp_dir TMP_DIR     Temporary directory for intermediate files.
-  --suffix SUFFIX       Suffix for FASTA files.
-  --model_dir MODEL_DIR
-                        Directory with trained models.
-  --phage_feature_table PHAGE_FEATURE_TABLE
-                        Path to the phage feature table.
-  --output_dir OUTPUT_DIR
-                        Directory to save results.
-  --sensitivity SENSITIVITY
-                        Sensitivity for MMseqs2 search.
-  --coverage COVERAGE   Minimum coverage for assignment.
-  --min_seq_id MIN_SEQ_ID
-                        Minimum sequence identity for assignment.
-  --threads THREADS     Number of threads for MMseqs2.
-```
-
-Example usage:
-
 ```bash
 run-assign-and-predict-workflow --input_dir /path/to/genome/fasta --genome_list /path/to/genome_list.csv --genome_type strain --mmseqs_db /path/to/mmseqs_db --clusters_tsv /path/to/clusters.tsv --feature_map /path/to/selected_features.csv --output_dir /path/to/output_dir --tmp_dir /path/to/tmp_dir --model_dir /path/to/model_dir --phage_feature_table /path/to/phage_feature_table.csv --threads 4
 ```
@@ -314,49 +242,6 @@ The clustering and feature table generation step involves clustering protein seq
 
 __CLI__:
 
-Help message:
-
-```bash
-usage: run-clustering-workflow [-h] -ih INPUT_STRAIN -ip INPUT_PHAGE -im INTERACTION_MATRIX -o OUTPUT [--tmp TMP] [--min_seq_id MIN_SEQ_ID] [--coverage COVERAGE] [--sensitivity SENSITIVITY] [--suffix SUFFIX] [--threads THREADS]
-                               [--strain_list STRAIN_LIST] [--strain_column STRAIN_COLUMN] [--phage_list PHAGE_LIST] [--phage_column PHAGE_COLUMN] [--compare] [--source_strain SOURCE_STRAIN] [--source_phage SOURCE_PHAGE]
-
-Run full feature table generation and merging workflow.
-
-options:
-  -h, --help            show this help message and exit
-  -ih INPUT_STRAIN, --input_strain INPUT_STRAIN
-                        Input path for strain clustering (directory or file).
-  -ip INPUT_PHAGE, --input_phage INPUT_PHAGE
-                        Input path for phage clustering (directory or file).
-  -im INTERACTION_MATRIX, --interaction_matrix INTERACTION_MATRIX
-                        Path to the interaction matrix.
-  -o OUTPUT, --output OUTPUT
-                        Output directory to save results.
-  --tmp TMP             Temporary directory for intermediate files.
-  --min_seq_id MIN_SEQ_ID
-                        Minimum sequence identity for clustering.
-  --coverage COVERAGE   Minimum coverage for clustering.
-  --sensitivity SENSITIVITY
-                        Sensitivity for clustering.
-  --suffix SUFFIX       Suffix for input FASTA files.
-  --threads THREADS     Number of threads to use.
-  --strain_list STRAIN_LIST
-                        Path to a strain list file for filtering.
-  --strain_column STRAIN_COLUMN
-                        Column in the strain list containing strain names.
-  --phage_list PHAGE_LIST
-                        Path to a phage list file for filtering.
-  --phage_column PHAGE_COLUMN
-                        Column in the phage list containing phage names.
-  --compare             Compare original clusters with assigned clusters.
-  --source_strain SOURCE_STRAIN
-                        Prefix for naming selected features for strain in the assignment step.
-  --source_phage SOURCE_PHAGE
-                        Prefix for naming selected features for phage in the assignment step.
-```
-
-Example usage:
-
 ```bash
 run-clustering-workflow --input_host /path/to/host/fasta --input_phage /path/to/phage/fasta --interaction_matrix /path/to/interaction_matrix.csv --output /path/to/output_dir --threads 4
 ```
@@ -381,29 +266,6 @@ Perform feature selection on your generated feature table using recursive featur
 
 __CLI__:
 
-Help message:
-
-```bash
-usage: run-feature-selection-workflow [-h] -i INPUT -o OUTPUT [--threads THREADS] [--num_features NUM_FEATURES] [--filter_type FILTER_TYPE] [--num_runs NUM_RUNS]
-
-Run feature selection workflow.
-
-options:
-  -h, --help            show this help message and exit
-  -i INPUT, --input INPUT
-                        Input path for the full feature table.
-  -o OUTPUT, --output OUTPUT
-                        Base output directory for the results.
-  --threads THREADS     Number of threads to use.
-  --num_features NUM_FEATURES
-                        Number of features to select during RFE.
-  --filter_type FILTER_TYPE
-                        Type of filtering to use ('none', 'strain', 'phage').
-  --num_runs NUM_RUNS   Number of feature selection iterations to run.
-```
-
-Usage example:
-
 ```bash
 run-feature-selection-workflow --input /path/to/merged_feature_table.csv --output /path/to/output_dir --threads 4 --num_features 100 --num_runs_fs 50
 ```
@@ -427,31 +289,6 @@ run_feature_selection_workflow(
 Run the modeling workflow using selected features and evaluate model performance using metrics such as MCC, AUC, F1-Score, Precision and Recall. Generates performance plots to evaluate and compare feature selection thresholds.
 
 __CLI__:
-
-Help message:
-
-```bash
-usage: run-modeling-workflow [-h] -i INPUT_DIR -o OUTPUT_DIR [--threads THREADS] [--num_runs NUM_RUNS] [--set_filter SET_FILTER] [--sample_column SAMPLE_COLUMN] [--phenotype_column PHENOTYPE_COLUMN]
-
-Run modeling workflow on selected feature tables.
-
-options:
-  -h, --help            show this help message and exit
-  -i INPUT_DIR, --input_dir INPUT_DIR
-                        Directory containing selected feature tables.
-  -o OUTPUT_DIR, --output_dir OUTPUT_DIR
-                        Directory to save results of the experiments.
-  --threads THREADS     Number of threads to use.
-  --num_runs NUM_RUNS   Number of runs per feature table.
-  --set_filter SET_FILTER
-                        Filter for dataset ('none', 'strain', 'phage', 'dataset').
-  --sample_column SAMPLE_COLUMN
-                        Column name for the sample identifier (optional).
-  --phenotype_column PHENOTYPE_COLUMN
-                        Column name for the phenotype (optional).
-```
-
-Example usage:
 
 ```bash
 run-modeling-workflow --input_dir /path/to/filtered_feature_tables --output_dir /path/to/output_dir --threads 4 --num_runs 100

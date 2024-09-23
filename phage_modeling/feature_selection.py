@@ -444,6 +444,7 @@ def generate_feature_tables(model_testing_dir, full_feature_table_file, filter_t
     # Process each cut-off value
     for cut_off in cut_offs:
         features_occurrence_filter = features_occurrence_df[features_occurrence_df['Occurrence'] >= cut_off]
+        print(f'Cut-off: {cut_off} - Features: {len(features_occurrence_filter)}')
 
         # Ensure the filtered feature set is within reasonable bounds
         if 20 < len(features_occurrence_filter) < interaction_count / 20:

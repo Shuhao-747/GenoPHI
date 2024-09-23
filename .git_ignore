@@ -1,0 +1,17 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Setuptools egg info
+*.egg-info/
+
+# Virtual environment
+.env/
+.venv/
+ENV/
+env/
+venv/
+
+# Ignore __pycache__ in any subdirectory
+phage_modeling/**/__pycache__/
