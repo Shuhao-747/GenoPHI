@@ -52,11 +52,20 @@ def predict_interactions(model_dir, prediction_feature_table):
         model_subdir_path = os.path.join(model_dir, subdir)
         model_file = os.path.join(model_subdir_path, "best_model.pkl")
 
-        # If pkl model not found, use cbm
+        # Check for pkl model, otherwise use cbm
         if not os.path.exists(model_file):
             model_file = os.path.join(model_subdir_path, "best_model.cbm")
+            if not os.path.exists(model_file):
+                # Log a warning and skip this model if neither file exists
+                logging.warning(f"Model file not found for run {subdir}: Skipping.")
+                continue
 
-        model = load_model(model_file)
+        # Load the model and catch any potential errors
+        try:
+            model = load_model(model_file)
+        except Exception as e:
+            logging.error(f"Error loading model for run {subdir}: {e}")
+            continue
 
         # Get strain and phage columns
         target_features_testing = prediction_feature_table.drop(columns=['strain', 'phage'])
@@ -77,6 +86,7 @@ def predict_interactions(model_dir, prediction_feature_table):
 
         all_predictions_df = pd.concat([all_predictions_df, predictions_df_temp], ignore_index=True)
 
+    # Return combined predictions even if some models were missing
     return all_predictions_df
 
 def calculate_mean_predictions(all_predictions_df):
