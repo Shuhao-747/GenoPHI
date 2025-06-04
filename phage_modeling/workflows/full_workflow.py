@@ -4,11 +4,6 @@ import argparse
 import logging
 import time
 import psutil
-from phage_modeling.mmseqs2_clustering import run_clustering_workflow, run_feature_assignment, merge_feature_tables
-from phage_modeling.feature_selection import run_feature_selection_iterations, generate_feature_tables
-from phage_modeling.select_feature_modeling import run_experiments
-from phage_modeling.workflows.feature_annotations_workflow import run_predictive_proteins_workflow
-from phage_modeling.workflows.select_and_model_workflow import run_modeling_workflow_from_feature_table
 from phage_modeling.workflows.protein_family_workflow import run_protein_family_workflow
 from phage_modeling.workflows.kmer_table_workflow import run_kmer_table_workflow 
 
