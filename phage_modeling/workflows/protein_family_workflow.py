@@ -129,7 +129,12 @@ def run_protein_family_workflow(
     min_cluster_presence=2, 
     use_shap=False, 
     bootstrapping=False,
-    clear_tmp=False):
+    clear_tmp=False,
+    use_feature_clustering=False,
+    feature_cluster_method='hierarchical',
+    feature_n_clusters=20,
+    feature_min_cluster_presence=2
+):
     """
     Complete workflow: Feature table generation, feature selection, modeling, and predictive proteins extraction.
     
@@ -306,7 +311,11 @@ def run_protein_family_workflow(
                 output_dir=merged_output_dir,
                 sample_column=sample_column,
                 phage_features=os.path.join(phage_output_dir, "features", "feature_table.csv"),
-                remove_suffix=False
+                remove_suffix=False,
+                use_feature_clustering=use_feature_clustering,
+                feature_cluster_method=feature_cluster_method,
+                feature_n_clusters=feature_n_clusters,
+                feature_min_cluster_presence=feature_min_cluster_presence
             )
             logging.info(f"Merged feature table saved in: {merged_output_dir}")
         else:
@@ -317,7 +326,11 @@ def run_protein_family_workflow(
                 phenotype_matrix=phenotype_matrix,
                 output_dir=output_dir,
                 sample_column=sample_column,
-                remove_suffix=False
+                remove_suffix=False,
+                use_feature_clustering=use_feature_clustering,
+                feature_cluster_method=feature_cluster_method,
+                feature_n_clusters=feature_n_clusters,
+                feature_min_cluster_presence=feature_min_cluster_presence
             )
             logging.info(f"Strain feature table merged and saved at: {feature_selection_input}")
 
@@ -526,6 +539,16 @@ def main():
     optional_input_group.add_argument('--filter_by_cluster_presence', action='store_true', help='Filter features by cluster/group presence instead of train/test presence.')
     optional_input_group.add_argument('--min_cluster_presence', type=int, default=2, help='Minimum number of clusters/groups a feature must be present in (default: 2).')
 
+    # Feature clustering parameters
+    feature_clustering_group = parser.add_argument_group('Feature clustering (pre-processing)')
+    feature_clustering_group.add_argument('--use_feature_clustering', action='store_true', 
+                                        help='Enable pre-processing cluster-based feature filtering')
+    feature_clustering_group.add_argument('--feature_cluster_method', default='hierarchical', 
+                                        choices=['hierarchical'], help='Pre-processing clustering method')
+    feature_clustering_group.add_argument('--feature_n_clusters', type=int, default=20, 
+                                        help='Number of clusters for pre-processing feature clustering')
+    feature_clustering_group.add_argument('--feature_min_cluster_presence', type=int, default=2, 
+                                        help='Min clusters a feature must appear in during pre-processing')
     # Output arguments
     output_group = parser.add_argument_group('Output arguments')
     output_group.add_argument('-o', '--output', type=str, required=True, help='Output directory to save results.')
@@ -600,7 +623,11 @@ def main():
         filter_by_cluster_presence=args.filter_by_cluster_presence,
         min_cluster_presence=args.min_cluster_presence,
         clear_tmp=args.clear_tmp,
-        bootstrapping=args.bootstrapping
+        bootstrapping=args.bootstrapping,
+        use_feature_clustering=args.use_feature_clustering,
+        feature_cluster_method=args.feature_cluster_method,
+        feature_n_clusters=args.feature_n_clusters,
+        feature_min_cluster_presence=args.feature_min_cluster_presence
     )
 
 if __name__ == "__main__":

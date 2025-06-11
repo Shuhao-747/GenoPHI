@@ -7,6 +7,7 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 from Bio import SeqIO
 from collections import defaultdict
+from sklearn.cluster import AgglomerativeClustering
 
 # Set thread limits for libraries to prevent oversubscription
 os.environ['OMP_NUM_THREADS'] = '12'
@@ -631,8 +632,101 @@ def run_feature_assignment(input_file, output_dir, source='strain', select='none
     feature_assignments.to_csv(os.path.join(output_dir, 'feature_assignments.csv'), index=False)
     feature_table.to_csv(os.path.join(output_dir, 'feature_table.csv'), index=False)
 
+def cluster_and_filter_features(
+    feature_table,
+    feature_type='strain', 
+    sample_column='strain',
+    use_feature_clustering=False,
+    feature_cluster_method='hierarchical',
+    feature_n_clusters=20,
+    feature_min_cluster_presence=2,
+    output_dir=None
+):
+    """
+    Clusters samples by feature content and filters features based on cluster presence.
+    This is for pre-processing, separate from train-test split clustering.
+    
+    Returns:
+        filtered_feature_table (DataFrame): Feature table with cluster-filtered features
+        cluster_assignments (DataFrame): Sample-to-cluster assignments (optional)
+    """
+    if not use_feature_clustering:
+        return feature_table, None
+        
+    # Extract feature columns for clustering
+    feature_columns = [col for col in feature_table.columns if col.startswith(f"{feature_type[0]}c_")]
+    
+    if not feature_columns:
+        logging.warning(f"No {feature_type} feature columns found for clustering.")
+        return feature_table, None
+    
+    # Prepare clustering data
+    clustering_data = feature_table[[sample_column] + feature_columns].drop_duplicates()
+    
+    # Handle edge case where we have fewer samples than requested clusters
+    n_samples = len(clustering_data)
+    if n_samples < 2:
+        logging.warning(f"Insufficient samples ({n_samples}) for clustering. Skipping feature clustering.")
+        return feature_table, None
+    
+    actual_n_clusters = min(feature_n_clusters, n_samples - 1)
+    if actual_n_clusters != feature_n_clusters:
+        logging.warning(f"Reduced clusters from {feature_n_clusters} to {actual_n_clusters} due to sample size")
+    
+    # Perform hierarchical clustering
+    clusterer = AgglomerativeClustering(n_clusters=actual_n_clusters)
+    cluster_labels = clusterer.fit_predict(clustering_data[feature_columns])
+    
+    # Create cluster assignments
+    clustering_data['cluster'] = cluster_labels
+    cluster_assignments = clustering_data[[sample_column, 'cluster']]
+    
+    # Merge back to full feature table
+    feature_table_with_clusters = feature_table.merge(cluster_assignments, on=sample_column, how='left')
+    
+    # Filter features by cluster presence
+    if feature_min_cluster_presence > 1:
+        # Group by cluster and see which features are present
+        cluster_feature_presence = feature_table_with_clusters.groupby('cluster')[feature_columns].apply(
+            lambda group: (group > 0).any()
+        )
+        
+        # Count how many clusters each feature appears in
+        feature_cluster_counts = cluster_feature_presence.sum(axis=0)
+        
+        # Keep features that appear in at least feature_min_cluster_presence clusters
+        valid_features = feature_cluster_counts[feature_cluster_counts >= feature_min_cluster_presence].index.tolist()
+        
+        # Filter the feature table
+        other_columns = [col for col in feature_table.columns if col not in feature_columns]
+        filtered_feature_table = feature_table[other_columns + valid_features]
+        
+        logging.info(f"Pre-processing cluster filtering: kept {len(valid_features)}/{len(feature_columns)} {feature_type} features")
+        logging.info(f"Removed {len(feature_columns) - len(valid_features)} features present in < {feature_min_cluster_presence} clusters")
+    else:
+        filtered_feature_table = feature_table
+    
+    # Save cluster assignments if output_dir provided
+    if output_dir:
+        cluster_file = os.path.join(output_dir, f"{feature_type}_preprocess_clusters.csv")
+        cluster_assignments.to_csv(cluster_file, index=False)
+        logging.info(f"Pre-processing cluster assignments saved to: {cluster_file}")
+    
+    return filtered_feature_table, cluster_assignments
 
-def merge_feature_tables(strain_features, phenotype_matrix, output_dir, sample_column='strain', phage_features=None, remove_suffix=False, output_file=None):
+def merge_feature_tables(
+    strain_features, 
+    phenotype_matrix, 
+    output_dir, 
+    sample_column='strain', 
+    phage_features=None, 
+    remove_suffix=False, 
+    output_file=None,
+    use_feature_clustering=False,
+    feature_cluster_method='hierarchical', 
+    feature_n_clusters=20,
+    feature_min_cluster_presence=2
+):
     """
     Merges strain (and optionally phage) feature tables with a phenotype matrix.
 
@@ -723,6 +817,37 @@ def merge_feature_tables(strain_features, phenotype_matrix, output_dir, sample_c
         except Exception as e:
             logging.error(f'Error merging strain features with phenotype matrix: {e}')
             raise
+
+    if use_feature_clustering:
+        logging.info("Applying pre-processing feature clustering...")
+        
+        # Cluster strain features if they exist
+        strain_feature_columns = [col for col in feature_table.columns if col.startswith('sc_')]
+        if strain_feature_columns:
+            feature_table, _ = cluster_and_filter_features(
+                feature_table,
+                feature_type='strain',
+                sample_column=sample_column,
+                use_feature_clustering=True,
+                feature_cluster_method=feature_cluster_method,
+                feature_n_clusters=feature_n_clusters,
+                feature_min_cluster_presence=feature_min_cluster_presence,
+                output_dir=output_dir
+            )
+        
+        # Cluster phage features if they exist
+        phage_feature_columns = [col for col in feature_table.columns if col.startswith('pc_')]
+        if phage_feature_columns and 'phage' in feature_table.columns:
+            feature_table, _ = cluster_and_filter_features(
+                feature_table,
+                feature_type='phage',
+                sample_column='phage',
+                use_feature_clustering=True,
+                feature_cluster_method=feature_cluster_method,
+                feature_n_clusters=feature_n_clusters,
+                feature_min_cluster_presence=feature_min_cluster_presence,
+                output_dir=output_dir
+            )
 
     # Determine output filename
     output_filename = f"{output_file}_full_feature_table.csv" if output_file else "full_feature_table.csv"

@@ -383,7 +383,11 @@ def run_kmer_table_workflow(
     weights_method='log10',
     check_feature_presence=False,
     filter_by_cluster_presence=False,
-    min_cluster_presence=2
+    min_cluster_presence=2,
+    use_feature_clustering=False,
+    feature_cluster_method='hierarchical',
+    feature_n_clusters=20,
+    feature_min_cluster_presence=2
 ):
     """
     Executes a full workflow for k-mer-based feature table construction, including strain and phage clustering,
@@ -546,7 +550,11 @@ def run_kmer_table_workflow(
                 output_dir=output_dir,
                 sample_column=sample_column,
                 phage_features=phage_final_feature_table_output,
-                remove_suffix=remove_suffix
+                remove_suffix=remove_suffix,
+                use_feature_clustering=use_feature_clustering,
+                feature_cluster_method=feature_cluster_method,
+                feature_n_clusters=feature_n_clusters,
+                feature_min_cluster_presence=feature_min_cluster_presence
             )
 
             logging.info(f"Merged feature table saved to: {merged_table_path}")
@@ -653,6 +661,16 @@ def main():
     optional_input_group.add_argument('--phage_list', default=None, help="Full list of phages to include in the analysis.")
     optional_input_group.add_argument('--ignore_families', action='store_true', help="Ignore protein families when defining k-mer features")
 
+    feature_clustering_group = parser.add_argument_group('Feature clustering (pre-processing)')
+    feature_clustering_group.add_argument('--use_feature_clustering', action='store_true', 
+                                        help='Enable pre-processing cluster-based feature filtering')
+    feature_clustering_group.add_argument('--feature_cluster_method', default='hierarchical', 
+                                        choices=['hierarchical'], help='Pre-processing clustering method')
+    feature_clustering_group.add_argument('--feature_n_clusters', type=int, default=20, 
+                                        help='Number of clusters for pre-processing feature clustering')
+    feature_clustering_group.add_argument('--feature_min_cluster_presence', type=int, default=2, 
+                                        help='Min clusters a feature must appear in during pre-processing')
+
     # Output arguments
     output_group = parser.add_argument_group('Output arguments')
     output_group.add_argument('-o', '--output_dir', required=True, help="Directory to save all output files.")
@@ -726,7 +744,11 @@ def main():
         weights_method=args.weights_method,
         check_feature_presence=args.check_feature_presence,
         filter_by_cluster_presence=args.filter_by_cluster_presence,
-        min_cluster_presence=args.min_cluster_presence
+        min_cluster_presence=args.min_cluster_presence,
+        use_feature_clustering=args.use_feature_clustering,
+        feature_cluster_method=args.feature_cluster_method,
+        feature_n_clusters=args.feature_n_clusters,
+        feature_min_cluster_presence=args.feature_min_cluster_presence
     )
 
 if __name__ == "__main__":

@@ -125,7 +125,11 @@ def run_full_workflow(
     remove_suffix=False,
     one_gene=False,
     ignore_families=False,
-    modeling=False
+    modeling=False,
+    use_feature_clustering=False,
+    feature_cluster_method='hierarchical',
+    feature_n_clusters=20,
+    feature_min_cluster_presence=2
 ):
     os.makedirs(output, exist_ok=True)
     setup_logging(output)
@@ -183,7 +187,11 @@ def run_full_workflow(
                                                         check_feature_presence=check_feature_presence,
                                                         filter_by_cluster_presence=filter_by_cluster_presence,
                                                         min_cluster_presence=min_cluster_presence,
-                                                        clear_tmp=clear_tmp)
+                                                        clear_tmp=clear_tmp,
+                                                        use_feature_clustering=use_feature_clustering,
+                                                        feature_cluster_method=feature_cluster_method,
+                                                        feature_n_clusters=feature_n_clusters,
+                                                        feature_min_cluster_presence=feature_min_cluster_presence)
         write_section_report("Protein_Family_Workflow", metrics['protein_family'], output)
     else:
         logging.info(f"Found existing metrics file: {metrics_file}. Skipping protein family workflow.")
@@ -252,7 +260,11 @@ def run_full_workflow(
                                                     min_cluster_size=min_cluster_size,
                                                     min_samples=min_samples,
                                                     cluster_selection_epsilon=cluster_selection_epsilon,
-                                                    check_feature_presence=check_feature_presence)
+                                                    check_feature_presence=check_feature_presence,
+                                                    use_feature_clustering=use_feature_clustering,
+                                                    feature_cluster_method=feature_cluster_method,
+                                                    feature_n_clusters=feature_n_clusters,
+                                                    feature_min_cluster_presence=feature_min_cluster_presence)
     write_section_report("Kmer_Workflow", metrics['kmer_workflow'], output)
 
     # Final combined report
@@ -302,6 +314,16 @@ def main():
     clustering_group.add_argument('--coverage', type=float, default=0.8, help='Minimum coverage for clustering (default: 0.8).')
     clustering_group.add_argument('--sensitivity', type=float, default=7.5, help='Sensitivity for clustering (default: 7.5).')
     clustering_group.add_argument('--compare', action='store_true', help='Compare clustering results.')
+
+    feature_clustering_group = parser.add_argument_group('Feature clustering (pre-processing)')
+    feature_clustering_group.add_argument('--use_feature_clustering', action='store_true', 
+                                        help='Enable pre-processing cluster-based feature filtering')
+    feature_clustering_group.add_argument('--feature_cluster_method', default='hierarchical', 
+                                        choices=['hierarchical'], help='Pre-processing clustering method')
+    feature_clustering_group.add_argument('--feature_n_clusters', type=int, default=20, 
+                                        help='Number of clusters for pre-processing feature clustering')
+    feature_clustering_group.add_argument('--feature_min_cluster_presence', type=int, default=2, 
+                                        help='Min clusters a feature must appear in during pre-processing')
 
     # Feature selection and modeling parameters
     fs_modeling_group = parser.add_argument_group('Feature selection and modeling')
@@ -386,7 +408,11 @@ def main():
         remove_suffix=args.remove_suffix,
         one_gene=args.one_gene,
         ignore_families=args.ignore_families,
-        modeling=args.modeling
+        modeling=args.modeling,
+        use_feature_clustering=args.use_feature_clustering,
+        feature_cluster_method=args.feature_cluster_method,
+        feature_n_clusters=args.feature_n_clusters,
+        feature_min_cluster_presence=args.feature_min_cluster_presence
     )
 
 if __name__ == "__main__":

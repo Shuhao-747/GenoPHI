@@ -4,6 +4,7 @@ import time
 import logging
 import psutil
 import numpy as np
+import pandas as pd
 from phage_modeling.mmseqs2_clustering import run_clustering_workflow, run_feature_assignment, merge_feature_tables
 
 # Configure logging
@@ -33,11 +34,30 @@ def write_report(output_dir, start_time, end_time, ram_usage, avg_cpu_usage, max
     logging.info(f"Report saved to: {report_file}")
 
 # Main workflow function
-def run_full_feature_workflow(input_path_strain, output_dir, phenotype_matrix, tmp_dir="tmp", 
-                              input_path_phage=None, min_seq_id=0.6, coverage=0.8, 
-                              sensitivity=7.5, suffix='faa', threads=4, strain_list=None, 
-                              strain_column='strain', phage_list=None, phage_column='phage', 
-                              compare=False, source_strain='strain', source_phage='phage', max_ram=8):
+def run_full_feature_workflow(
+    input_path_strain, 
+    output_dir, 
+    phenotype_matrix, 
+    tmp_dir="tmp", 
+    input_path_phage=None, 
+    min_seq_id=0.6, 
+    coverage=0.8, 
+    sensitivity=7.5, 
+    suffix='faa', 
+    threads=4, 
+    strain_list=None, 
+    strain_column='strain', 
+    phage_list=None, 
+    phage_column='phage', 
+    compare=False, 
+    source_strain='strain', 
+    source_phage='phage', 
+    max_ram=8,
+    use_feature_clustering=False,
+    feature_cluster_method='hierarchical',
+    feature_n_clusters=20,
+    feature_min_cluster_presence=2
+):
     """
     Combines MMseqs2 clustering, feature assignment for strain (and optionally phage) genomes, 
     and merges feature tables with the phenotype matrix.
@@ -125,7 +145,11 @@ def run_full_feature_workflow(input_path_strain, output_dir, phenotype_matrix, t
                 output_dir=merged_output_dir,
                 sample_column=strain_column,
                 phage_features=phage_features,
-                remove_suffix=False
+                remove_suffix=False,
+                use_feature_clustering=use_feature_clustering,
+                feature_cluster_method=feature_cluster_method,
+                feature_n_clusters=feature_n_clusters,
+                feature_min_cluster_presence=feature_min_cluster_presence
             )
             logging.info(f"Merged feature table saved in: {merged_output_dir}")
         else:
@@ -138,7 +162,11 @@ def run_full_feature_workflow(input_path_strain, output_dir, phenotype_matrix, t
                 phenotype_matrix=phenotype_matrix,
                 output_dir=output_dir,
                 sample_column=strain_column,
-                remove_suffix=False
+                remove_suffix=False,
+                use_feature_clustering=use_feature_clustering,
+                feature_cluster_method=feature_cluster_method,
+                feature_n_clusters=feature_n_clusters,
+                feature_min_cluster_presence=feature_min_cluster_presence
             )
             logging.info(f"Strain feature table merged with phenotype matrix and saved at: {output_dir}")
 
@@ -184,6 +212,10 @@ def main():
     parser.add_argument('--source_strain', type=str, default='strain', help='Prefix for naming selected features for strain in the assignment step.')
     parser.add_argument('--source_phage', type=str, default='phage', help='Prefix for naming selected features for phage in the assignment step.')
     parser.add_argument('--max_ram', type=float, default=8, help='Maximum RAM usage in GB for feature selection.')
+    parser.add_argument('--use_feature_clustering', action='store_true', help='Enable pre-processing cluster-based feature filtering')
+    parser.add_argument('--feature_cluster_method', default='hierarchical', choices=['hierarchical'], help='Pre-processing clustering method')
+    parser.add_argument('--feature_n_clusters', type=int, default=20, help='Number of clusters for pre-processing feature clustering')
+    parser.add_argument('--feature_min_cluster_presence', type=int, default=2, help='Min clusters a feature must appear in during pre-processing')
 
     args = parser.parse_args()
 
@@ -206,7 +238,11 @@ def main():
         compare=args.compare,
         source_strain=args.source_strain,
         source_phage=args.source_phage,
-        max_ram=args.max_ram  # Pass max_ram here
+        max_ram=args.max_ram,
+        use_feature_clustering=args.use_feature_clustering,
+        feature_cluster_method=args.feature_cluster_method,
+        feature_n_clusters=args.feature_n_clusters,
+        feature_min_cluster_presence=args.feature_min_cluster_presence
     )
 
 if __name__ == "__main__":

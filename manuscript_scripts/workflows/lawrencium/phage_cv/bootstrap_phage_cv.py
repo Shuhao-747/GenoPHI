@@ -63,6 +63,12 @@ def main():
     min_cluster_presence = "2"     
     bootstrapping = True                  # Enable bootstrapping for feature selection
     
+    # NEW: Pre-processing feature clustering parameters
+    use_feature_clustering = False        # Enable pre-processing cluster-based feature filtering
+    feature_cluster_method = "hierarchical"  # Pre-processing clustering method ('hierarchical' only for now)
+    feature_n_clusters = "20"            # Number of clusters for pre-processing feature clustering
+    feature_min_cluster_presence = "2"   # Min clusters a feature must appear in during pre-processing
+    
     # Prediction parameters
     duplicate_all = True                 # Duplicate all genomes in feature table for predictions
     
@@ -106,7 +112,12 @@ def main():
         "--n_clusters", n_clusters,
         "--min_cluster_size", min_cluster_size,
         "--cluster_selection_epsilon", cluster_selection_epsilon,
-        "--min_cluster_presence", min_cluster_presence,  
+        "--min_cluster_presence", min_cluster_presence,
+        
+        # NEW: Pre-processing feature clustering parameters
+        "--feature_cluster_method", feature_cluster_method,
+        "--feature_n_clusters", feature_n_clusters,
+        "--feature_min_cluster_presence", feature_min_cluster_presence,
     ]
     
     # Add optional arguments
@@ -128,6 +139,8 @@ def main():
         cmd.append("--bootstrapping")
     if duplicate_all:
         cmd.append("--duplicate_all")
+    if use_feature_clustering:  # NEW
+        cmd.append("--use_feature_clustering")
     if dry_run:
         cmd.append("--dry_run")
     
@@ -151,6 +164,11 @@ def main():
     print(f"Use dynamic weights:  {use_dynamic_weights}")
     print(f"Use clustering:       {use_clustering}")
     print(f"Cluster method:       {cluster_method}")
+    print(f"Use feature clustering: {use_feature_clustering}")  # NEW
+    if use_feature_clustering:  # NEW
+        print(f"Feature cluster method: {feature_cluster_method}")
+        print(f"Feature n_clusters:     {feature_n_clusters}")
+        print(f"Feature min presence:   {feature_min_cluster_presence}")
     print()
     print(f"SLURM account:       {account}")
     print(f"Environment:         {environment}")
