@@ -50,9 +50,9 @@ def create_stage1_clustering(args, run_dir):
 #SBATCH --qos={args.qos}
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=60G
-#SBATCH --time=6:00:00
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=240G
+#SBATCH --time=24:00:00
 #SBATCH --output=logs/stage1_%j.out
 #SBATCH --error=logs/stage1_%j.err
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-SLURM workflow submission for phage-based bootstrap cross-validation.
+SLURM workflow submission for phi_bootstrap_workflow_update.py
 Creates a job array where each job handles one iteration of the bootstrap validation.
-This version performs cross-validation by leaving out phages (not strains).
+Iterations run in parallel, but steps within each iteration are sequential.
+Takes the same arguments as phi_bootstrap_workflow_update.py
 """
 
 import os
@@ -23,13 +24,13 @@ def submit_job(script_path):
         return None
 
 def create_bootstrap_job_array(args, run_dir):
-    """Create SLURM job array script for bootstrap iterations - PHAGE-based CV"""
+    """Create SLURM job array script for bootstrap iterations"""
     
     # Get the absolute path to the original script directory for imports
     script_dir = os.path.dirname(os.path.abspath(__file__))
     
     script_content = f"""#!/bin/bash
-#SBATCH --job-name=bootstrap_phage_cv
+#SBATCH --job-name=bootstrap_validation
 #SBATCH --account={args.account}
 #SBATCH --partition={args.partition}
 #SBATCH --qos={args.qos}
@@ -39,12 +40,11 @@ def create_bootstrap_job_array(args, run_dir):
 #SBATCH --mem={args.mem_per_job}G
 #SBATCH --time={args.time_limit}
 #SBATCH --array=1-{args.n_iterations}
-#SBATCH --output=logs/bootstrap_phage_cv_%A_%a.out
-#SBATCH --error=logs/bootstrap_phage_cv_%A_%a.err
+#SBATCH --output=logs/bootstrap_%A_%a.out
+#SBATCH --error=logs/bootstrap_%A_%a.err
 
-echo "=== Bootstrap Phage-based Cross-Validation - Iteration $SLURM_ARRAY_TASK_ID ==="
+echo "=== Bootstrap Validation - Iteration $SLURM_ARRAY_TASK_ID ==="
 echo "Job: $SLURM_JOB_ID, Array Task: $SLURM_ARRAY_TASK_ID, Node: $SLURMD_NODENAME, Started: $(date)"
-echo "CV Type: Phage-based (training on all strains + 90% phages, validating on 10% phages)"
 
 module load anaconda3
 conda activate {args.environment} 2>&1 || {{
@@ -69,73 +69,60 @@ import random
 from phage_modeling.workflows.protein_family_workflow import run_protein_family_workflow
 from phage_modeling.workflows.assign_predict_workflow import assign_predict_workflow
 
-def get_full_phage_list(interaction_matrix, input_phage_dir, phage_column):
-    '''Get list of phages that exist in both interaction matrix and phage directory'''
+def get_full_strain_list(interaction_matrix, input_strain_dir, strain_column):
     print(f'Reading interaction matrix: {{interaction_matrix}}')
     interaction_df = pd.read_csv(interaction_matrix)
     print(f'Interaction matrix shape: {{interaction_df.shape}}')
     print(f'Interaction matrix columns: {{list(interaction_df.columns)}}')
     
-    if phage_column not in interaction_df.columns:
-        print(f'ERROR: Column \\'{{phage_column}}\\' not found in interaction matrix')
+    if strain_column not in interaction_df.columns:
+        print(f'ERROR: Column \\'{{strain_column}}\\' not found in interaction matrix')
         print(f'Available columns: {{list(interaction_df.columns)}}')
         return []
     
-    phages_in_matrix = interaction_df[phage_column].unique()
-    phages_in_matrix = [str(s) for s in phages_in_matrix]
-    print(f'Found {{len(phages_in_matrix)}} unique phages in interaction matrix')
-    print(f'First 10 phages from matrix: {{list(phages_in_matrix[:10])}}')
+    strains_in_matrix = interaction_df[strain_column].unique()
+    strains_in_matrix = [str(s) for s in strains_in_matrix]
+    print(f'Found {{len(strains_in_matrix)}} unique strains in interaction matrix')
+    print(f'First 10 strains from matrix: {{list(strains_in_matrix[:10])}}')
     
-    print(f'Reading phage directory: {{input_phage_dir}}')
-    phage_files = [f for f in os.listdir(input_phage_dir) if f.endswith('.faa')]
-    phages_in_dir = ['.'.join(f.split('.')[:-1]) for f in phage_files]
-    print(f'Found {{len(phages_in_dir)}} phage files in directory')
-    print(f'First 10 phages from directory: {{phages_in_dir[:10]}}')
+    print(f'Reading strain directory: {{input_strain_dir}}')
+    strain_files = [f for f in os.listdir(input_strain_dir) if f.endswith('.faa')]
+    strains_in_dir = ['.'.join(f.split('.')[:-1]) for f in strain_files]
+    print(f'Found {{len(strains_in_dir)}} strain files in directory')
+    print(f'First 10 strains from directory: {{strains_in_dir[:10]}}')
     
-    full_phage_list = list(set(phages_in_matrix).intersection(set(phages_in_dir)))
-    print(f'Intersection: {{len(full_phage_list)}} phages found in both matrix and directory')
+    full_strain_list = list(set(strains_in_matrix).intersection(set(strains_in_dir)))
+    print(f'Intersection: {{len(full_strain_list)}} strains found in both matrix and directory')
     
-    if len(full_phage_list) == 0:
-        print('ERROR: No phages found in both interaction matrix and input directory!')
+    if len(full_strain_list) == 0:
+        print('ERROR: No strains found in both interaction matrix and input directory!')
         print('This might be due to naming mismatches between the files and matrix.')
     
-    return full_phage_list
+    return full_strain_list
 
-def split_phages(full_phage_list, iteration, validation_percentage=0.1):
-    '''Split phages into modeling and validation sets'''
-    if len(full_phage_list) == 0:
-        print('ERROR: Cannot split empty phage list!')
+def split_strains(full_strain_list, iteration, validation_percentage=0.1):
+    if len(full_strain_list) == 0:
+        print('ERROR: Cannot split empty strain list!')
         return [], []
         
-    print(f'Splitting {{len(full_phage_list)}} phages for iteration {{iteration}}')
+    print(f'Splitting {{len(full_strain_list)}} strains for iteration {{iteration}}')
     random.seed(iteration)
-    phage_list_copy = full_phage_list.copy()  # Don't modify original list
-    random.shuffle(phage_list_copy)
+    strain_list_copy = full_strain_list.copy()  # Don't modify original list
+    random.shuffle(strain_list_copy)
     
-    split_index = int(len(phage_list_copy) * (1 - validation_percentage))
-    modeling_phages = phage_list_copy[:split_index]
-    validation_phages = phage_list_copy[split_index:]
+    split_index = int(len(strain_list_copy) * (1 - validation_percentage))
+    modeling_strains = strain_list_copy[:split_index]
+    validation_strains = strain_list_copy[split_index:]
     
-    print(f'Created {{len(modeling_phages)}} modeling phages and {{len(validation_phages)}} validation phages')
-    return modeling_phages, validation_phages
+    print(f'Created {{len(modeling_strains)}} modeling strains and {{len(validation_strains)}} validation strains')
+    return modeling_strains, validation_strains
 
 def select_best_cutoff(output_dir):
-    '''Select the cutoff with highest MCC from modeling results'''
     metrics_file = os.path.join(output_dir, 'modeling_results/model_performance/model_performance_metrics.csv')
     metrics_df = pd.read_csv(metrics_file)
     metrics_df = metrics_df.sort_values(['MCC', 'cut_off'], ascending=[False, False])
     best_cutoff = metrics_df['cut_off'].values[0]
     return best_cutoff
-
-def create_modeling_interaction_matrix(interaction_matrix, modeling_phages, iteration_output_dir):
-    '''Create interaction matrix filtered to modeling phages only'''
-    interaction_df = pd.read_csv(interaction_matrix)
-    modeling_interaction_df = interaction_df[interaction_df['phage'].isin(modeling_phages)]
-    
-    modeling_interaction_path = os.path.join(iteration_output_dir, 'modeling_interaction_matrix.csv')
-    modeling_interaction_df.to_csv(modeling_interaction_path, index=False)
-    print(f'Created modeling interaction matrix with {{len(modeling_interaction_df)}} interactions')
-    return modeling_interaction_path
 
 # Get iteration number from SLURM array task ID
 iteration = int(os.environ['SLURM_ARRAY_TASK_ID'])
@@ -155,91 +142,88 @@ print(f'Starting iteration {{iteration}}...')
 os.makedirs(iteration_output_dir, exist_ok=True)
 modeling_tmp_dir = os.path.join(iteration_output_dir, 'tmp')
 
-# Get full phage list
-full_phage_list = get_full_phage_list('{args.interaction_matrix}', '{args.input_phage_dir}', '{args.phage_column}')
+# Get full strain list
+full_strain_list = get_full_strain_list('{args.interaction_matrix}', '{args.input_strain_dir}', '{args.strain_column}')
 
-if len(full_phage_list) == 0:
-    print('FATAL ERROR: No valid phages found. Cannot proceed with iteration.')
+if len(full_strain_list) == 0:
+    print('FATAL ERROR: No valid strains found. Cannot proceed with iteration.')
     sys.exit(1)
 
-# Verify strain directory exists (required for this workflow)
-if not os.path.exists('{args.input_strain_dir}'):
-    print('FATAL ERROR: Strain directory not found: {args.input_strain_dir}')
+# Verify phage directory exists (required for this workflow)
+if not os.path.exists('{args.input_phage_dir}'):
+    print('FATAL ERROR: Phage directory not found: {args.input_phage_dir}')
     sys.exit(1)
 
-# Handle clustering directory and phage splits
+# Handle clustering directory and strain splits
 clustering_dir = {repr(args.clustering_dir) if args.clustering_dir else 'None'}
 if clustering_dir:
-    modeling_phages_old = os.path.join(clustering_dir, f'iteration_{{iteration}}', 'modeling_phages.csv')
-    validation_phages_old = os.path.join(clustering_dir, f'iteration_{{iteration}}', 'validation_phages.csv')
+    modeling_strains_old = os.path.join(clustering_dir, f'iteration_{{iteration}}', 'modeling_strains.csv')
+    validation_strains_old = os.path.join(clustering_dir, f'iteration_{{iteration}}', 'validation_strains.csv')
     
-    modeling_phages_new = os.path.join(iteration_output_dir, 'modeling_phages.csv')
-    validation_phages_new = os.path.join(iteration_output_dir, 'validation_phages.csv')
+    modeling_strains_new = os.path.join(iteration_output_dir, 'modeling_strains.csv')
+    validation_strains_new = os.path.join(iteration_output_dir, 'validation_strains.csv')
     
-    if not os.path.exists(modeling_phages_new):
-        os.symlink(modeling_phages_old, modeling_phages_new)
-    if not os.path.exists(validation_phages_new):
-        os.symlink(validation_phages_old, validation_phages_new)
+    if not os.path.exists(modeling_strains_new):
+        os.symlink(modeling_strains_old, modeling_strains_new)
+    if not os.path.exists(validation_strains_new):
+        os.symlink(validation_strains_old, validation_strains_new)
         
-    modeling_phages = pd.read_csv(modeling_phages_new)['phage'].tolist()
-    validation_phages = pd.read_csv(validation_phages_new)['phage'].tolist()
+    modeling_strains = pd.read_csv(modeling_strains_new)['strain'].tolist()
+    validation_strains = pd.read_csv(validation_strains_new)['strain'].tolist()
 else:
-    modeling_phages_path = os.path.join(iteration_output_dir, 'modeling_phages.csv')
-    validation_phages_path = os.path.join(iteration_output_dir, 'validation_phages.csv')
+    modeling_strains_path = os.path.join(iteration_output_dir, 'modeling_strains.csv')
+    validation_strains_path = os.path.join(iteration_output_dir, 'validation_strains.csv')
     
-    if not os.path.exists(modeling_phages_path) or not os.path.exists(validation_phages_path):
-        modeling_phages, validation_phages = split_phages(full_phage_list, iteration=iteration)
+    if not os.path.exists(modeling_strains_path) or not os.path.exists(validation_strains_path):
+        modeling_strains, validation_strains = split_strains(full_strain_list, iteration=iteration)
         
-        if len(modeling_phages) == 0 or len(validation_phages) == 0:
-            print(f'ERROR: Empty phage lists created for iteration {{iteration}}')
-            print(f'Modeling phages: {{len(modeling_phages)}}, Validation phages: {{len(validation_phages)}}')
+        if len(modeling_strains) == 0 or len(validation_strains) == 0:
+            print(f'ERROR: Empty strain lists created for iteration {{iteration}}')
+            print(f'Modeling strains: {{len(modeling_strains)}}, Validation strains: {{len(validation_strains)}}')
             sys.exit(1)
         
-        # Save phage lists
-        print(f'Saving {{len(modeling_phages)}} modeling phages to {{modeling_phages_path}}')
-        pd.DataFrame(modeling_phages, columns=['phage']).to_csv(modeling_phages_path, index=False)
+        # Save strain lists
+        print(f'Saving {{len(modeling_strains)}} modeling strains to {{modeling_strains_path}}')
+        pd.DataFrame(modeling_strains, columns=['strain']).to_csv(modeling_strains_path, index=False)
         
-        print(f'Saving {{len(validation_phages)}} validation phages to {{validation_phages_path}}')
-        pd.DataFrame(validation_phages, columns=['phage']).to_csv(validation_phages_path, index=False)
+        print(f'Saving {{len(validation_strains)}} validation strains to {{validation_strains_path}}')
+        pd.DataFrame(validation_strains, columns=['strain']).to_csv(validation_strains_path, index=False)
         
         # Verify files were written correctly
-        test_modeling = pd.read_csv(modeling_phages_path)
-        test_validation = pd.read_csv(validation_phages_path)
+        test_modeling = pd.read_csv(modeling_strains_path)
+        test_validation = pd.read_csv(validation_strains_path)
         print(f'Verification - Modeling CSV has {{len(test_modeling)}} rows, Validation CSV has {{len(test_validation)}} rows')
         
     else:
-        print('Phage lists already exist. Loading...')
-        modeling_phages_df = pd.read_csv(modeling_phages_path)
-        validation_phages_df = pd.read_csv(validation_phages_path)
+        print('Strain lists already exist. Loading...')
+        modeling_strains_df = pd.read_csv(modeling_strains_path)
+        validation_strains_df = pd.read_csv(validation_strains_path)
         
-        if len(modeling_phages_df) == 0 or len(validation_phages_df) == 0:
-            print(f'ERROR: Existing phage CSV files are empty!')
-            print(f'Modeling CSV: {{len(modeling_phages_df)}} rows, Validation CSV: {{len(validation_phages_df)}} rows')
+        if len(modeling_strains_df) == 0 or len(validation_strains_df) == 0:
+            print(f'ERROR: Existing strain CSV files are empty!')
+            print(f'Modeling CSV: {{len(modeling_strains_df)}} rows, Validation CSV: {{len(validation_strains_df)}} rows')
             # Regenerate the files
-            modeling_phages, validation_phages = split_phages(full_phage_list, iteration=iteration)
-            pd.DataFrame(modeling_phages, columns=['phage']).to_csv(modeling_phages_path, index=False)
-            pd.DataFrame(validation_phages, columns=['phage']).to_csv(validation_phages_path, index=False)
+            modeling_strains, validation_strains = split_strains(full_strain_list, iteration=iteration)
+            pd.DataFrame(modeling_strains, columns=['strain']).to_csv(modeling_strains_path, index=False)
+            pd.DataFrame(validation_strains, columns=['strain']).to_csv(validation_strains_path, index=False)
         else:
-            modeling_phages = modeling_phages_df['phage'].tolist()
-            validation_phages = validation_phages_df['phage'].tolist()
-            print(f'Loaded {{len(modeling_phages)}} modeling phages and {{len(validation_phages)}} validation phages')
+            modeling_strains = modeling_strains_df['strain'].tolist()
+            validation_strains = validation_strains_df['strain'].tolist()
+            print(f'Loaded {{len(modeling_strains)}} modeling strains and {{len(validation_strains)}} validation strains')
 
-# Create filtered interaction matrix for modeling (all strains + modeling phages only)
-modeling_interaction_matrix = create_modeling_interaction_matrix('{args.interaction_matrix}', modeling_phages, iteration_output_dir)
-
-# Step 1: Run protein_family_workflow with all strains + modeling phages
+# Step 1: Run protein_family_workflow with modeling strains
 metrics_file = os.path.join(iteration_output_dir, 'modeling_results/model_performance/model_performance_metrics.csv')
 iteration_clustering_dir = None
 if clustering_dir:
     iteration_clustering_dir = os.path.join(clustering_dir, f'iteration_{{iteration}}')
 
 if not os.path.exists(metrics_file):
-    print('Running protein family workflow with all strains + modeling phages...')
+    print('Running protein family workflow...')
     run_protein_family_workflow(
         input_path_strain='{args.input_strain_dir}',
         input_path_phage='{args.input_phage_dir}',
         clustering_dir=iteration_clustering_dir,
-        phenotype_matrix=modeling_interaction_matrix,  # Use filtered interaction matrix
+        phenotype_matrix='{args.interaction_matrix}',
         output_dir=iteration_output_dir,
         tmp_dir=modeling_tmp_dir,
         min_seq_id=0.4,
@@ -248,9 +232,9 @@ if not os.path.exists(metrics_file):
         threads={args.threads},
         phenotype_column='interaction',
         phage_column='phage',
-        strain_list=modeling_interaction_matrix,  # Use all strains
-        phage_list=os.path.join(iteration_output_dir, 'modeling_phages.csv'),  # Filter to modeling phages
-        filter_type='{args.filter_type}',  # Use phage-based filtering
+        strain_list=os.path.join(iteration_output_dir, 'modeling_strains.csv'),
+        phage_list='{args.interaction_matrix}',
+        filter_type='strain',
         num_runs_fs={args.num_runs_fs},
         num_runs_modeling={args.num_runs_modeling},
         use_dynamic_weights={args.use_dynamic_weights},
@@ -277,67 +261,37 @@ else:
 # Step 2: Get the cutoff with the highest MCC
 best_cutoff = select_best_cutoff(iteration_output_dir)
 model_dir = os.path.join(iteration_output_dir, f'modeling_results', f'{{best_cutoff}}')
-strain_feature_table_path = os.path.join(iteration_output_dir, 'strain', 'features', 'feature_table.csv')
 
-# Step 3: Assign features to validation phages and predict interactions
+# Step 3: Predict interactions for validation strains
 validation_output_dir = os.path.join(iteration_output_dir, 'model_validation')
 os.makedirs(validation_output_dir, exist_ok=True)
 validation_tmp_dir = os.path.join(validation_output_dir, 'tmp')
 
-# Check for modified AA directory for phages  
-modified_aa_dir = os.path.join(iteration_output_dir, 'phage', 'modified_AAs', 'phage')
-input_phage_dir = modified_aa_dir if os.path.exists(modified_aa_dir) else '{args.input_phage_dir}'
+# Check for modified AA directory
+modified_aa_dir = os.path.join(iteration_output_dir, 'strain', 'modified_AAs', 'strain')
+input_strain_dir = modified_aa_dir if os.path.exists(modified_aa_dir) else '{args.input_strain_dir}'
 
 select_feature_table = os.path.join(iteration_output_dir, 'feature_selection', 'filtered_feature_tables', f'select_feature_table_{{best_cutoff}}.csv')
 
-print('Step 3a: Assigning features to validation phages...')
-# Import the individual workflow functions for clarity
-from phage_modeling.workflows.assign_features_workflow import run_assign_features_workflow
-from phage_modeling.workflows.prediction_workflow import run_prediction_workflow
-
-# Assign features to validation phages using training clustering
-assign_output_dir = os.path.join(validation_output_dir, 'assign_results')
-run_assign_features_workflow(
-    input_dir=input_phage_dir,  # Validation phage directory 
-    mmseqs_db=os.path.join(iteration_output_dir, 'tmp', 'phage', 'mmseqs_db'),  # Phage database from training
+print('Running prediction workflow...')
+assign_predict_workflow(
+    input_dir=input_strain_dir,
+    genome_list=os.path.join(iteration_output_dir, 'validation_strains.csv'),
+    mmseqs_db=os.path.join(iteration_output_dir, 'tmp', 'strain', 'mmseqs_db'),
+    clusters_tsv=os.path.join(iteration_output_dir, 'strain', 'clusters.tsv'),
+    feature_map=os.path.join(iteration_output_dir, 'strain', 'features', 'selected_features.csv'),
     tmp_dir=validation_tmp_dir,
-    output_dir=assign_output_dir,
-    feature_map=os.path.join(iteration_output_dir, 'phage', 'features', 'selected_features.csv'),  # Phage feature mapping
-    clusters_tsv=os.path.join(iteration_output_dir, 'phage', 'clusters.tsv'),  # Phage clusters from training  
-    genome_type='phage',  # Assigning features TO phages
-    genome_list=os.path.join(iteration_output_dir, 'validation_phages.csv'),  # Only validation phages
+    suffix='faa',
+    model_dir=model_dir,
+    feature_table=select_feature_table,
+    phage_feature_table_path=os.path.join(iteration_output_dir, 'phage', 'features', 'feature_table.csv'),
+    output_dir=validation_output_dir,
+    threads={args.threads},
+    genome_type='strain',
     sensitivity=7.5,
     coverage=0.8,
     min_seq_id=0.4,
-    threads={args.threads},
-    suffix='faa',
     duplicate_all={args.duplicate_all}
-)
-
-print('Step 3b: Predicting interactions between all strains and validation phages...')
-# Now predict using strain features (from training) + assigned phage features (validation)
-# Create properly named strain features for prediction workflow
-predict_input_dir = os.path.join(validation_output_dir, 'prediction_input')
-os.makedirs(predict_input_dir, exist_ok=True)
-strain_features_for_prediction = os.path.join(predict_input_dir, 'strain_feature_table.csv')
-validation_phage_features_path = os.path.join(assign_output_dir, 'phage_combined_feature_table.csv')
-
-# Copy to expected filename pattern
-if not os.path.exists(strain_features_for_prediction):
-    shutil.copy2(strain_feature_table_path, strain_features_for_prediction)
-    print(f'Copied strain features for prediction workflow')
-
-predict_output_dir = os.path.join(validation_output_dir, 'predict_results')
-
-run_prediction_workflow(
-    input_dir=predict_input_dir,  # Directory with strain features (all strains from training)
-    phage_feature_table_path=validation_phage_features_path,  # Assigned validation phage features
-    model_dir=model_dir,
-    output_dir=predict_output_dir,
-    feature_table=select_feature_table,  # Feature filtering from best model
-    strain_source='strain',
-    phage_source='phage', 
-    threads={args.threads}
 )
 
 print(f'Iteration {{iteration}} completed successfully')
@@ -346,7 +300,7 @@ print(f'Iteration {{iteration}} completed successfully')
 echo "Iteration $SLURM_ARRAY_TASK_ID completed: $(date)"
 """
     
-    script_path = os.path.join(run_dir, "bootstrap_phage_cv_job_array.sh")
+    script_path = os.path.join(run_dir, "bootstrap_job_array.sh")
     with open(script_path, 'w') as f:
         f.write(script_content)
     os.chmod(script_path, 0o755)
@@ -356,7 +310,7 @@ def create_final_aggregation_job(args, run_dir, dependency):
     """Create job to aggregate all iteration results"""
     
     script_content = f"""#!/bin/bash
-#SBATCH --job-name=bootstrap_phage_aggregate
+#SBATCH --job-name=bootstrap_aggregate
 #SBATCH --account={args.account}
 #SBATCH --partition={args.partition}
 #SBATCH --qos={args.qos}
@@ -369,7 +323,7 @@ def create_final_aggregation_job(args, run_dir, dependency):
 #SBATCH --output=logs/aggregate_%j.out
 #SBATCH --error=logs/aggregate_%j.err
 
-echo "=== Bootstrap Phage-based CV Results Aggregation ==="
+echo "=== Bootstrap Results Aggregation ==="
 echo "Job: $SLURM_JOB_ID, Node: $SLURMD_NODENAME, Started: $(date)"
 
 module load anaconda3
@@ -384,12 +338,11 @@ python3 -c "
 import pandas as pd
 import os
 
-# Aggregate final predictions from all iterations (phage-based CV)
+# Aggregate final predictions from all iterations
 output_dir = '{args.output_dir}'
 final_predictions = pd.DataFrame()
 
-print('Aggregating results from {args.n_iterations} iterations (phage-based CV)...')
-print('Each iteration predicted interactions between all strains and 10% validation phages')
+print('Aggregating results from {args.n_iterations} iterations...')
 completed_iterations = 0
 
 for i in range(1, {args.n_iterations} + 1):
@@ -411,23 +364,13 @@ if len(final_predictions) > 0:
     print(f'Final predictions saved with {{len(final_predictions)}} total predictions from {{completed_iterations}} iterations')
     
     # Generate summary statistics
-    if 'strain' in final_predictions.columns and 'phage' in final_predictions.columns:
-        summary_stats = final_predictions.groupby(['strain', 'phage']).agg({{
-            'Confidence': ['mean', 'std', 'count']
-        }}).round(4)
-        summary_stats.columns = ['mean_confidence', 'std_confidence', 'n_iterations']
-        summary_stats = summary_stats.reset_index()
-        print(f'Prediction summary saved with {{len(summary_stats)}} unique strain-phage pairs')
-    else:
-        print('Warning: Expected columns strain/phage not found, creating basic summary')
-        summary_stats = final_predictions.groupby(final_predictions.columns[0]).agg({{
-            'Confidence': ['mean', 'std', 'count']
-        }}).round(4)
-        summary_stats.columns = ['mean_confidence', 'std_confidence', 'n_iterations']
-        summary_stats = summary_stats.reset_index()
-        print(f'Prediction summary saved with {{len(summary_stats)}} unique interactions')
-    
+    summary_stats = final_predictions.groupby(['strain', 'phage']).agg({{
+        'prediction': ['mean', 'std', 'count']
+    }}).round(4)
+    summary_stats.columns = ['mean_prediction', 'std_prediction', 'n_iterations']
+    summary_stats = summary_stats.reset_index()
     summary_stats.to_csv(os.path.join(output_dir, 'prediction_summary.csv'), index=False)
+    print(f'Prediction summary saved with {{len(summary_stats)}} unique strain-phage pairs')
 else:
     print('ERROR: No results found to aggregate!')
     exit(1)
@@ -443,18 +386,17 @@ echo "Aggregation completed: $(date)"
     return script_path
 
 def main():
-    parser = argparse.ArgumentParser(description="Submit phage-based bootstrap validation workflow as SLURM job array")
+    parser = argparse.ArgumentParser(description="Submit bootstrap validation workflow as SLURM job array")
     
-    # Copy ALL arguments but change strain_column to phage_column
+    # Copy ALL arguments from phi_bootstrap_workflow_update.py
     parser.add_argument('--input_strain_dir', type=str, required=True, help="Directory containing strain FASTA files.")
     parser.add_argument('--input_phage_dir', type=str, required=True, help="Directory containing phage FASTA files.")
     parser.add_argument('--interaction_matrix', type=str, required=True, help="Path to the interaction matrix.")
-    parser.add_argument('--clustering_dir', type=str, help="Directory containing clustering results.")
+    parser.add_argument('--clustering_dir', type=str, help="Directory containing strain clustering results.")
     parser.add_argument('--output_dir', type=str, required=True, help="Directory to save results.")
     parser.add_argument('--n_iterations', type=int, default=10, help="Number of iterations.")
     parser.add_argument('--threads', type=int, default=4, help="Number of threads to use.")
-    parser.add_argument('--phage_column', type=str, default='phage', help="Column in the interaction matrix containing phage names.")
-    parser.add_argument('--filter_type', type=str, default='phage', help="Filter type for cross-validation ('phage' for phage-based CV).")
+    parser.add_argument('--strain_column', type=str, default='strain', help="Column in the interaction matrix containing strain names.")
     parser.add_argument('--num_runs_fs', type=int, default=25, help="Number of runs for feature selection.")
     parser.add_argument('--num_runs_modeling', type=int, default=50, help="Number of runs for modeling.")
     parser.add_argument('--use_dynamic_weights', action='store_true', help="Use dynamic weights for feature selection.")
@@ -513,11 +455,11 @@ def main():
     try:
         import pandas as pd
         df = pd.read_csv(args.interaction_matrix)
-        if args.phage_column not in df.columns:
-            print(f"Error: Column '{args.phage_column}' not found in interaction matrix")
+        if args.strain_column not in df.columns:
+            print(f"Error: Column '{args.strain_column}' not found in interaction matrix")
             print(f"Available columns: {list(df.columns)}")
             return 1
-        print(f"Interaction matrix validation: ✓ Found {len(df)} rows with column '{args.phage_column}'")
+        print(f"Interaction matrix validation: ✓ Found {len(df)} rows with column '{args.strain_column}'")
     except Exception as e:
         print(f"Error reading interaction matrix: {e}")
         return 1
@@ -536,20 +478,15 @@ def main():
         return 1
     print(f"Phage directory validation: ✓ Found {len(phage_files)} .faa files")
     
-    # Validate filter_type
-    if args.filter_type != 'phage':
-        print(f"Warning: filter_type is '{args.filter_type}', but 'phage' is recommended for phage-based CV")
-    
     # Create timestamped run directory
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    run_dir = f"bootstrap_phage_cv_run_{timestamp}"
+    run_dir = f"bootstrap_run_{timestamp}"
     os.makedirs(run_dir, exist_ok=True)
     os.makedirs(os.path.join(run_dir, "logs"), exist_ok=True)
     
-    print(f"=== Phage-based Bootstrap Validation SLURM Submission ===")
+    print(f"=== Bootstrap Validation SLURM Submission ===")
     print(f"Run directory: {run_dir}")
     print(f"Output directory: {args.output_dir}")
-    print(f"Cross-validation type: PHAGE-based (leaving out phages)")
     print(f"Number of iterations: {args.n_iterations}")
     print(f"Threads per job: {args.threads}")
     print(f"Account: {args.account}, Environment: {args.environment}")
@@ -587,7 +524,7 @@ def main():
     
     # Submit bootstrap job array
     print("Submitting bootstrap job array...")
-    bootstrap_job_id = submit_job("bootstrap_phage_cv_job_array.sh")
+    bootstrap_job_id = submit_job("bootstrap_job_array.sh")
     print(f"Bootstrap job array: {bootstrap_job_id}")
     
     if bootstrap_job_id:
@@ -604,25 +541,18 @@ def main():
     # Change back to original directory
     os.chdir(original_dir)
     
-    print(f"\n=== Phage-based CV Job Submission Summary ===")
+    print(f"\n=== Job Submission Summary ===")
     print(f"Run directory: {run_dir_abs}")
     print(f"Bootstrap array: {args.n_iterations} parallel jobs")
     print(f"Expected total runtime: {args.time_limit} per iteration (parallel)")
     print("\nMonitor with:")
     print("  squeue -u $USER")
-    print("  squeue -u $USER --name=bootstrap_phage_cv  # Just bootstrap jobs")
-    print("  tail -f logs/bootstrap_phage_cv_*.out")
+    print("  squeue -u $USER --name=bootstrap_validation  # Just bootstrap jobs")
+    print("  tail -f logs/bootstrap_*.out")
     print(f"\nResults will be in:")
     print(f"  Individual iterations: {args.output_dir}/iteration_N/")
     print(f"  Final aggregated: {args.output_dir}/final_predictions.csv")
     print(f"  Summary stats: {args.output_dir}/prediction_summary.csv")
-    print(f"\nNote: This performs PHAGE-based cross-validation:")
-    print(f"  - Each iteration uses ALL strains for training")
-    print(f"  - Each iteration leaves out ~10% of phages for validation")
-    print(f"  - Validation phages get features assigned using training clustering")
-    print(f"  - Models predict interactions between all strains and validation phages")
-    print(f"  - Results show how well models generalize to new phages")
-    print(f"  - Splits are reproducible across runs (iteration-based seeding)")
 
 if __name__ == "__main__":
     main()

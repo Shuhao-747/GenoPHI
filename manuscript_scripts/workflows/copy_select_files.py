@@ -7,6 +7,7 @@ Extracts key results and performance metrics while avoiding intermediate files.
 import argparse
 import shutil
 import sys
+import pandas as pd
 from datetime import datetime
 from pathlib import Path
 
@@ -55,13 +56,54 @@ def copy_directory_safe(src, dest, dir_description=""):
         return False
 
 
-def export_bootstrap_results(source_dir, dest_dir):
+def get_best_cutoff(model_perf_metrics_file):
+    """
+    Read model performance metrics and return the best cutoff.
+    
+    Args:
+        model_perf_metrics_file (Path): Path to model_performance_metrics.csv
+        
+    Returns:
+        str: Best cutoff identifier (e.g., "cutoff_5") or None if not found
+    """
+    try:
+        if not model_perf_metrics_file.exists():
+            return None
+            
+        df = pd.read_csv(model_perf_metrics_file)
+        
+        # Try to determine the best cutoff based on available metrics
+        if 'MCC' in df.columns:
+            # For classification, use MCC (higher is better)
+            best_row = df.loc[df['MCC'].idxmax()]
+            metric_name = 'MCC'
+            metric_value = best_row['MCC']
+        elif 'r2' in df.columns:
+            # For regression, use R2 (higher is better)
+            best_row = df.loc[df['r2'].idxmax()]
+            metric_name = 'r2'
+            metric_value = best_row['r2']
+        else:
+            print(f"  ⚠ Warning: No recognized performance metric found in {model_perf_metrics_file}")
+            return None
+        
+        best_cutoff = best_row['cut_off']
+        print(f"  ✓ Best cutoff: {best_cutoff} (best {metric_name}: {metric_value:.4f})")
+        return best_cutoff
+        
+    except Exception as e:
+        print(f"  ✗ Error reading performance metrics: {e}")
+        return None
+
+
+def export_bootstrap_results(source_dir, dest_dir, minimal=False):
     """
     Export bootstrap validation results.
     
     Args:
         source_dir (Path): Source directory containing bootstrap_validation
         dest_dir (Path): Destination directory for export
+        minimal (bool): If True, skip large files and only copy best cutoff
     """
     source_dir = Path(source_dir)
     dest_dir = Path(dest_dir)
@@ -74,9 +116,12 @@ def export_bootstrap_results(source_dir, dest_dir):
     # Create destination directory
     dest_dir.mkdir(parents=True, exist_ok=True)
     
-    print("Exporting bootstrap validation results...")
+    mode_text = "MINIMAL" if minimal else "FULL"
+    print(f"Exporting bootstrap validation results ({mode_text} mode)...")
     print(f"Source: {source_dir}")
     print(f"Destination: {dest_dir}")
+    if minimal:
+        print("📦 Minimal mode: Skipping predictive_proteins, only copying best cutoff feature tables")
     print("")
     
     # Copy top-level final predictions
@@ -132,15 +177,40 @@ def export_bootstrap_results(source_dir, dest_dir):
             if copy_file_safe(src_file, dest_file, filename):
                 files_copied += 1
         
-        # Copy predictive_proteins directory
-        predictive_proteins_src = model_perf_src / "predictive_proteins"
-        predictive_proteins_dest = model_perf_dest / "predictive_proteins"
-        if copy_directory_safe(predictive_proteins_src, predictive_proteins_dest, "predictive_proteins directory"):
-            files_copied += 1
+        # Copy predictive_proteins directory (only if not minimal)
+        if not minimal:
+            predictive_proteins_src = model_perf_src / "predictive_proteins"
+            predictive_proteins_dest = model_perf_dest / "predictive_proteins"
+            if copy_directory_safe(predictive_proteins_src, predictive_proteins_dest, "predictive_proteins directory"):
+                files_copied += 1
+        else:
+            print("  📦 Skipping predictive_proteins directory (minimal mode)")
         
-        # Copy filtered_feature_tables directory
-        if copy_directory_safe(feature_tables_src, feature_tables_dest, "filtered_feature_tables directory"):
-            files_copied += 1
+        # Copy filtered_feature_tables (all or just best cutoff)
+        if minimal:
+            # Only copy the best cutoff feature table
+            metrics_file = model_perf_src / "model_performance_metrics.csv"
+            best_cutoff = get_best_cutoff(metrics_file)
+            
+            if best_cutoff:
+                # Extract cutoff number from "cutoff_X" format
+                if best_cutoff.startswith('cutoff_'):
+                    cutoff_num = best_cutoff.split('_')[-1]
+                    best_feature_file = f"select_feature_table_cutoff_{cutoff_num}.csv"
+                    
+                    src_file = feature_tables_src / best_feature_file
+                    dest_file = feature_tables_dest / best_feature_file
+                    
+                    if copy_file_safe(src_file, dest_file, f"best feature table ({best_feature_file})"):
+                        files_copied += 1
+                else:
+                    print(f"  ⚠ Warning: Unexpected cutoff format: {best_cutoff}")
+            else:
+                print("  ⚠ Warning: Could not determine best cutoff, skipping feature tables")
+        else:
+            # Copy entire filtered_feature_tables directory
+            if copy_directory_safe(feature_tables_src, feature_tables_dest, "filtered_feature_tables directory"):
+                files_copied += 1
         
         # Copy strain median predictions
         strain_pred_src = predict_src / "strain_median_predictions.csv"
@@ -168,27 +238,39 @@ def export_bootstrap_results(source_dir, dest_dir):
     print(f"Results saved to: {dest_dir}")
     
     # Create manifest file
-    create_manifest(dest_dir, source_dir, successful_iterations, total_iterations)
+    create_manifest(dest_dir, source_dir, successful_iterations, total_iterations, minimal)
 
 
-def create_manifest(dest_dir, source_dir, successful_iterations, total_iterations):
+def create_manifest(dest_dir, source_dir, successful_iterations, total_iterations, minimal=False):
     """Create a manifest file documenting the export."""
     manifest_file = dest_dir / "export_manifest.txt"
     
-    manifest_content = f"""Bootstrap Validation Export Manifest
+    mode_text = "MINIMAL" if minimal else "FULL"
+    
+    manifest_content = f"""Bootstrap Validation Export Manifest ({mode_text} Mode)
 =====================================
 Export Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 Source Directory: {source_dir}
 Destination Directory: {dest_dir}
+Export Mode: {mode_text}
 Total Iterations Processed: {successful_iterations}/{total_iterations}
 
 Files Exported per Iteration:
 - modeling_results/model_performance/model_performance_metrics.csv
 - modeling_results/model_performance/pr_curve.png
-- modeling_results/model_performance/roc_curve.png
+- modeling_results/model_performance/roc_curve.png"""
+
+    if not minimal:
+        manifest_content += """
 - modeling_results/model_performance/predictive_proteins/ (directory)
+- feature_selection/filtered_feature_tables/ (directory - all cutoffs)"""
+    else:
+        manifest_content += """
+- feature_selection/filtered_feature_tables/select_feature_table_cutoff_X.csv (best cutoff only)
+  (Note: predictive_proteins directory excluded in minimal mode)"""
+
+    manifest_content += """
 - model_validation/predict_results/strain_median_predictions.csv
-- feature_selection/filtered_feature_tables/ (directory)
 
 Top-level Files:
 - final_predictions.csv
@@ -197,6 +279,14 @@ Usage:
 This export contains only the key results and performance metrics from
 each bootstrap validation iteration, excluding intermediate files to
 minimize storage requirements while preserving essential outputs.
+"""
+    
+    if minimal:
+        manifest_content += """
+MINIMAL MODE NOTES:
+- Large predictive_proteins directories were excluded to save space
+- Only the best-performing cutoff feature table was copied per iteration
+- This reduces storage requirements while maintaining core results
 """
     
     try:
@@ -215,7 +305,7 @@ def main():
         epilog="""
 Examples:
   python export_bootstrap_results.py -i ./bootstrap_validation -o ./export
-  python export_bootstrap_results.py --input /scratch/user/bootstrap_validation --output ~/results
+  python export_bootstrap_results.py --input /scratch/user/bootstrap_validation --output ~/results --minimal
         """
     )
     
@@ -234,6 +324,12 @@ Examples:
     )
     
     parser.add_argument(
+        '--minimal',
+        action='store_true',
+        help='Minimal export: skip predictive_proteins directory and only copy best cutoff feature tables'
+    )
+    
+    parser.add_argument(
         '--dry-run',
         action='store_true',
         help='Show what would be copied without actually copying files'
@@ -242,7 +338,8 @@ Examples:
     args = parser.parse_args()
     
     if args.dry_run:
-        print("DRY RUN MODE - No files will be copied")
+        mode_text = "MINIMAL" if args.minimal else "FULL"
+        print(f"DRY RUN MODE ({mode_text}) - No files will be copied")
         print("")
     
     # Convert to Path objects and export
@@ -250,10 +347,11 @@ Examples:
     dest_path = Path(args.output).resolve()
     
     if not args.dry_run:
-        export_bootstrap_results(source_path, dest_path)
+        export_bootstrap_results(source_path, dest_path, minimal=args.minimal)
     else:
         print(f"Would export from: {source_path}")
         print(f"Would export to: {dest_path}")
+        print(f"Minimal mode: {args.minimal}")
         print("Run without --dry-run to perform actual export")
 
 
