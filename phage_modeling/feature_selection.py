@@ -38,7 +38,11 @@ def load_and_prepare_data(input_path, sample_column=None, phenotype_column=None,
     if full_feature_table.empty:
         raise ValueError("Input data is empty.")
     
-    full_feature_table = full_feature_table.dropna()
+    if full_feature_table.isnull().any().any():
+        print("Removing rows with missing values...")
+        full_feature_table.dropna(inplace=True)
+    else:
+        print("No missing values found.")
     full_feature_table = full_feature_table.reset_index(drop=True)
 
     # Prepare the feature set and drop unnecessary columns
