@@ -1,569 +1,1013 @@
-# Phage Modeling
+# GenoPHI
 
-Phage Modeling is a Python package designed to facilitate the machine-learning (ML)-based prediction of phage-host interactions based on gene content of phage and host genomes from amino acid (AA) sequences of protein coding genes and an interaction matrix of experimentally validate phage-host interactions. `phage_modeling` include the following functionalities in its workflows:
+**Genotype-to-Phenotype Phage-Host Interaction Prediction**
 
-1. __Clustering with MMSeqs2__: Cluster AA sequences of phages and hosts into gene families.
-2. __Gene Family Presence-Absence Matrices__: Generate presence-absence matrices of gene families in phage and host genomes
-3. __Feature Table Construction__: Build feature tables based on co-occurrence patterns of gene families. Gene families with identical occurrence patterns across all genomes are collapsed into a single feature.
-4. __Feature Selection__: Identification of protein family features that are predictive of phage-host interactions in a given dataset. Available methods include: recursive feature elimination (RFE), ANOVA using `SelectKBest`, chi-squared test, lasso linear regression, and SHAP feature importances.
-5. __CatBoost ML Pipelines__: Execute CatBoost-based pipelines for interaction prediction, including hyperparameter tuning, performance evaluation, and performance vizualization.
-6. __Prediction of New Interactions__: Assign gene family features to new genomes and predict their interactions with existing datasets.
+GenoPHI is a Python package for machine learning-based prediction of genotype-phenotype relationships using whole-genome sequence data. Originally designed for phage-host interaction prediction, GenoPHI supports both binary interaction prediction and regression tasks for any microbial phenotype. The package implements protein family-based and _k_-mer-based approaches to extract genomic features from amino acid sequences and predict phenotypes using CatBoost gradient boosting models.
 
-## Installation
-
-### Virtual Environment (_optional_)
-
-We recommend installing this package in a virtual environment. To generate a `conda` environment for this package, run the following:
-
-```bash
-conda create -n phage_modeling python=3
-conda activate phage_modeling
-```
-
-To install the `phage_modeling` package, clone the repository and install by running the following:
-
-```bash
-git clone https://github.com/Noonanav/phage_modeling.git
-cd phage_modeling
-pip install -e .
-```
-
-## External Dependencies
-This package requires `MMseqs2` for clustering and sequence assignment. You can install it via conda or mamba: 
-__With conda__:
-
-```bash
-conda install -c bioconda mmseqs2
-```
-
-__With Mamba__:
-
-```bash
-mamba install -c bioconda mmseqs2
-```
-
-For other installation methods, see the [MMSeqs2 Wiki](https://github.com/soedinglab/MMseqs2/wiki#installation)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
 ## Workflow Overview
 
-### Protein Family Feature Construction
+![GenoPHI Workflow](images/workflow_diagram.png)
+*Figure 1: GenoPHI workflow schematic showing the main analysis pipelines: Protein family-based workflow, _K_-mer-based workflow, and Predictive protein k-mer workflow. Each pathway includes feature extraction, selection, model training, and prediction steps.*
 
-The MMseqs2-based feature table generation process involves clustering protein sequences and creating a presence-absence matrix that represents the presence or absence of clusters (features) across genomes. First, sequences are processed into an MMseqs2 database and clustered based on sequence identity and coverage thresholds. For new sequences, they are assigned to the nearest existing clusters using MMseqs2 search. A presence-absence matrix is then generated to indicate the occurrence of clusters in each genome. This matrix is further used for feature selection and assignment, where unique clusters are identified for downstream analysis. The resulting feature tables can be merged with phenotype data for machine learning applications.
+## Table of Contents
 
-### Feature Selection
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+  - [CLI Commands Overview](#cli-commands-overview)
+  - [Workflows](#workflows)
+- [Input Data Formats](#input-data-formats)
+- [Feature Selection Methods](#feature-selection-methods)
+- [Performance Metrics](#performance-metrics)
+- [Output Directory Structure](#output-directory-structure)
+- [Python API](#python-api)
+- [Advanced Usage](#advanced-usage)
+- [Troubleshooting](#troubleshooting)
+- [Best Practices](#best-practices)
+- [Citation](#citation)
+- [Contributing](#contributing)
+- [License](#license)
+- [Support](#support)
+- [Acknowledgments](#acknowledgments)
 
-The feature selection workflow involves identifying the most predictive features from the dataset using various selection methods. The process allows users to select from Recursive Feature Elimination (RFE), SelectKBest (ANOVA F-test), Chi-Squared, Lasso, or SHAP-based methods. Data is split into training and testing sets, and feature selection is performed iteratively to identify top predictors of the target variable. Selected features are then used to train models, and their importance is ranked. After multiple runs, occurrence counts of selected features are compiled, and feature tables are generated for downstream analysis, providing a refined set of features for model training and evaluation.
+## Features
 
-### Modeling Workflow
+### Protein Family-Based Analysis
+1. **MMSeqs2 Clustering**: Cluster protein sequences into protein families based on sequence similarity
+2. **Feature Table Generation**: Create presence-absence matrices of protein families across genomes and consolidate into predictive features based on co-occurence across genomes
+3. **Feature Selection**: Identify predictive protein families (multiple available methods: RFE, SHAP, SHAP-RFE, ANOVA, Chi-squared, Lasso)
+4. **Model Training**: Train CatBoost models with hyperparameter optimization
+5. **Phenotype Prediction**: Predict interactions, resistance, or other phenotypes for new genomes
+6. **Feature Annotation**: Identify predictive protein sequences from predictive features
 
-The select feature modeling process involves training CatBoost models on filtered feature tables and assessing their performance. Multiple iterations are run for each feature table, where the data is split into training and testing sets. CatBoost models are trained using grid search to identify optimal hyperparameters. SHAP values are calculated for each model to determine feature importances. Performance metrics such as MCC, AUC, accuracy, precision, recall, and F1 are computed. Results are aggregated across runs and cutoffs, and SHAP summary plots visualize feature importances. Finally, performance metrics and SHAP values are saved for further analysis.
+### _K_-mer-Based Analysis
+1. **_K_-mer Feature Extraction**: Generate _k_-mer features from protein sequences with or without gene family context
+2. **Predictive _K_-mer Workflow**: Extract _k_-mers specifically from predictive protein families identified in protein family analysis
+3. **Feature Selection & Modeling**: Apply same robust feature selection and modeling pipelines
+4. **Flexible _K_-mer Lengths**: Support for single _k_-mer length or ranges (e.g., 3-6)
 
-## Performance Metrics
+### Application Modes
+- **Phage-Host Interaction Prediction**: Binary prediction of infection outcomes between phages and bacterial strains
+- **Single-Strain Phenotype Prediction**: Predict strain-level phenotypes (e.g., antibiotic resistance, growth rate) without requiring phage data
+- **Regression Tasks**: Predict continuous phenotypes (e.g., infection efficiency, metabolic rates)
+- **General Feature-Based Modeling**: Use any feature table with a phenotype column for custom applications
 
-- **AUC (Area Under the ROC Curve)**: The AUC represents the probability that a classifier will rank a randomly chosen positive instance higher than a randomly chosen negative one. It is calculated from the ROC curve as the area under the curve.
+### Advanced Capabilities
+- **Dynamic Feature Weighting**: Account for feature frequency distributions to handle imbalanced features
+- **Clustering-Based Selection**: Use HDBSCAN or hierarchical clustering for intelligent feature grouping
+- **Multiple Feature Selection Methods**: RFE, SHAP-RFE, SelectKBest, Chi-squared, Lasso, SHAP
+- **Comprehensive Performance Metrics**: AUC-ROC, Precision-Recall, MCC, F1-score, Accuracy
+- **SHAP Interpretability**: Feature importance analysis and visualization for model explainability
+- **Bootstrapping Support**: Robust model evaluation with multiple train-test splits
 
-    $\text{AUC} = \int_{0}^{1} TPR(FPR) \, dFPR$
+## Installation
 
-    where TPR is the True Positive Rate and FPR is the False Positive Rate.
+### Prerequisites
 
-- **Accuracy**: The proportion of true results (both true positives and true negatives) among the total number of cases.
+**External Dependency**: GenoPHI requires MMseqs2 for protein sequence clustering and assignment.
 
-    $\text{Accuracy} = \frac{TP + TN}{TP + TN + FP + FN}$
+Install via conda/mamba:
+```bash
+conda install -c bioconda mmseqs2
+# or
+mamba install -c bioconda mmseqs2
+```
 
-    where TP, TN, FP, and FN represent True Positives, True Negatives, False Positives, and False Negatives, respectively.
+For other installation methods, see the [MMSeqs2 Wiki](https://github.com/soedinglab/MMseqs2/wiki#installation).
 
-- **Precision**: The proportion of true positives among all instances that were predicted as positive.
+### System Requirements
 
-    $\text{Precision} = \frac{TP}{TP + FP}$
+**Minimum Requirements:**
+- Python 3.8 or higher
+- 8 GB RAM
+- 4 CPU cores
+- 10 GB free disk space
 
-- **Recall (Sensitivity or True Positive Rate)**: The proportion of true positives among all actual positive instances.
+**Recommended for Large Datasets:**
+- Python 3.10+
+- 32+ GB RAM
+- 8+ CPU cores
+- 50+ GB free disk space (depending on dataset size)
 
-    $\text{Recall} = \frac{TP}{TP + FN}$
+**Tested Operating Systems:**
+- Linux (Ubuntu 20.04+, CentOS 7+)
 
-- **F1 Score**: The harmonic mean of precision and recall. It balances the two metrics, especially useful when the class distribution is imbalanced.
+### Virtual Environment (Recommended)
 
-    $F1 = 2 \times \frac{\text{Precision} \times \text{Recall}}{\text{Precision} + \text{Recall}}$
+Create and activate a conda environment:
+```bash
+conda create -n genophi python=3.10
+conda activate genophi
+```
 
-- **MCC (Matthews Correlation Coefficient)**: A measure of the quality of binary classifications. It takes into account true and false positives and negatives, and is generally regarded as a balanced metric.
+### Install GenoPHI
 
-    $\text{MCC} = \frac{TP \times TN - FP \times FN}{\sqrt{(TP + FP)(TP + FN)(TN + FP)(TN + FN)}}$
+Clone and install from GitHub:
+```bash
+git clone https://github.com/Noonanav/GenoPHI.git
+cd GenoPHI
+pip install -e .
+```
 
-#### Performance Plots
+For development with optional dependencies:
+```bash
+pip install -e ".[dev]"
+```
 
-The following performance plots can be found in each `run_*` directory in the `<output_directory>/modeling_results/cutoff_*` directories for each modeling run:
+### Verify Installation
 
- - Confusion matrices
- - Precision-Recall Curves
- - ROC AUC Curves
- - SHAP feature importance bar plots
- - SHAP value jitter plots
+Test that GenoPHI is properly installed:
 
-The following performance summary plots can also be found in `<output_directory>/modeling_results/model_performance/` directory, with an overview of model performance across feature selection cutoffs:
+```bash
+# Check GenoPHI version
+genophi --version
 
-- SHAP value jitter plots showing SHAP values for all modeling runs:
+# Verify MMseqs2 is accessible
+mmseqs version
 
-![SHAP Summary](images/cutoff_5_shap_beeswarm.png)
+# Run basic help command
+genophi --help
+```
 
-- ROC AUC, precision-eecall, hit-rate, hit-ratio curves comparing feature selection cutoffs:
+## Quick Start
 
-![ROC AUC](images/roc_curve.png)
+GenoPHI provides a unified command-line interface accessible through the `genophi` command:
 
-![PR](images/pr_curve.png)
+```bash
+# View available commands
+genophi --help
 
-![Hit Rate](images/hit_rate_curve.png)
+# Get help for a specific command
+genophi protein-family-workflow --help
+```
 
-![Hit Ratio](images/hit_ratio_curve.png)
+### Recommended Default Run
+
+For most phage-host interaction prediction tasks, use these recommended settings:
+
+```bash
+genophi protein-family-workflow \
+    --input_strain strain_fastas/ \
+    --input_phage phage_fastas/ \
+    --phenotype_matrix interactions.csv \
+    --output results/ \
+    --threads 8 \
+    --num_features 100 \
+    --num_runs_fs 25 \
+    --num_runs_modeling 50 \
+    --method rfe \
+    --use_clustering \
+    --cluster_method hierarchical \
+    --n_clusters 20 \
+    --filter_type strain
+```
+
+**Key Parameters Explained:**
+- `--num_features 100`: Select top 100 features (adjust based on dataset size)
+- `--num_runs_fs 25`: 25 iterations for robust feature selection
+- `--num_runs_modeling 50`: 50 modeling runs for reliable performance estimates
+- `--method rfe`: Recursive Feature Elimination (balanced performance)
+- `--use_clustering`: Enable hierarchical clustering of features
+- `--filter_type strain`: Split data by strain to test generalization
+
+For single-strain phenotypes (no phage data):
+```bash
+genophi protein-family-workflow \
+    --input_strain strain_fastas/ \
+    --phenotype_matrix phenotypes.csv \
+    --output results/ \
+    --threads 8 \
+    --sample_column strain \
+    --phenotype_column resistance \
+    --filter_type none
+```
 
 ## Usage
 
-### Full Workflow
+### CLI Commands Overview
 
-#### Workflow Overview:
+GenoPHI provides the following main commands:
 
-1. **Clustering of Genomes**: 
-   The first step involves clustering the gene sequences of both host (strain) and phage genomes using MMseqs2. The clustering results in gene families, and each genome's genes are assigned to clusters. This step generates the cluster assignments for both the host and phage genomes.
+| Command | Description |
+|---------|-------------|
+| `protein-family-workflow` | **Recommended basic workflow**: Complete protein family-based workflow |
+| `full-workflow` | Protein families → _k_-mers from predictive proteins |
+| `kmer-workflow` | Complete _k_-mer-based workflow from all proteins |
+| `cluster` | Generate protein family clusters and feature tables |
+| `select-features` | Perform feature selection on any feature table |
+| `train` | Train predictive models on selected features |
+| `predict` | Predict phenotypes using trained models |
+| `select-and-train` | Feature selection + modeling from any feature table |
+| `assign-features` | Assign features to new genomes |
+| `assign-predict` | Assign features and predict (protein families) |
+| `annotate` | Annotate predictive features with functional info |
+| `kmer-assign-features` | Assign _k_-mer features to new genomes |
+| `kmer-assign-predict` | Assign _k_-mer features and predict |
 
-2. **Feature Table Generation**: 
-   Feature tables are created for the strain and phage genomes based on the gene families they are assigned to. These tables represent the presence or absence of specific gene families across all genomes.
+## Workflows
 
-3. **Merging Feature Tables**: 
-   The strain and phage feature tables are merged using the provided interaction matrix, which contains validated interactions between strains and phages.
+### 1. Protein Family Workflow (Recommended)
 
-4. **Feature Selection**: 
-   Feature selection methods, including Recursive Feature Elimination (RFE), ANOVA with `SelectKBest`, chi-squared test, lasso regression, and SHAP values, are applied to the merged feature table to identify the most predictive gene families (features) for host-phage interactions. These methods are run across multiple iterations, ensuring robust identification of relevant features. Results from each feature selection method are saved for easy comparison and further analysis.
+The primary workflow for most applications. Performs complete protein family clustering, feature selection, and modeling.
 
-5. **Modeling**: 
-   Using the selected features, machine learning models (CatBoost) are trained to predict host-phage interactions. The model is evaluated using performance metrics like ROC curves and Precision-Recall curves, and the trained models are saved for future predictions.
-
-6. **Interaction Prediction**: 
-   Once the model is trained, it is used to predict interactions between new genomes and phages. The predictions are outputted with confidence scores for each potential interaction.
-
-To run the entire workflow from feature table generation to modeling, you can use the `run-full-workflow` CLI command or call it directly in Python
-
-__CLI__:
-
-Help message:
-
-```bash
-usage: run-full-workflow [-h] -ih INPUT_STRAIN -ip INPUT_PHAGE -im INTERACTION_MATRIX [--suffix SUFFIX] [--strain_list STRAIN_LIST] [--phage_list PHAGE_LIST] [--strain_column STRAIN_COLUMN] [--phage_column PHAGE_COLUMN]
-                         [--source_strain SOURCE_STRAIN] [--source_phage SOURCE_PHAGE] [--sample_column SAMPLE_COLUMN] [--phenotype_column PHENOTYPE_COLUMN] -o OUTPUT [--tmp TMP] [--min_seq_id MIN_SEQ_ID] [--coverage COVERAGE]
-                         [--sensitivity SENSITIVITY] [--compare] [--filter_type FILTER_TYPE] [--method {rfe,select_k_best,chi_squared,lasso,shap}] [--num_features NUM_FEATURES] [--num_runs_fs NUM_RUNS_FS]
-                         [--num_runs_modeling NUM_RUNS_MODELING] [--threads THREADS]
-
-Complete workflow: Feature table generation, feature selection, and modeling.
-
-options:
-  -h, --help            show this help message and exit
-
-Input data:
-  -ih INPUT_STRAIN, --input_strain INPUT_STRAIN
-                        Path to the input directory or file for strain clustering.
-  -ip INPUT_PHAGE, --input_phage INPUT_PHAGE
-                        Path to the input directory or file for phage clustering.
-  -im INTERACTION_MATRIX, --interaction_matrix INTERACTION_MATRIX
-                        Path to the interaction matrix.
-
-Optional input arguments:
-  --suffix SUFFIX       Suffix for input FASTA files (default: faa).
-  --strain_list STRAIN_LIST
-                        Path to a strain list file for filtering (default: none).
-  --phage_list PHAGE_LIST
-                        Path to a phage list file for filtering (default: none).
-  --strain_column STRAIN_COLUMN
-                        Column in the strain list containing strain names (default: strain).
-  --phage_column PHAGE_COLUMN
-                        Column in the phage list containing phage names (default: phage).
-  --source_strain SOURCE_STRAIN
-                        Prefix for naming selected features for strain in the assignment step (default: strain).
-  --source_phage SOURCE_PHAGE
-                        Prefix for naming selected features for phage in the assignment step (default: phage).
-  --sample_column SAMPLE_COLUMN
-                        Column name for the sample identifier (optional).
-  --phenotype_column PHENOTYPE_COLUMN
-                        Column name for the phenotype (optional).
-
-Output arguments:
-  -o OUTPUT, --output OUTPUT
-                        Output directory to save results.
-  --tmp TMP             Temporary directory for intermediate files (default: tmp).
-
-Clustering:
-  --min_seq_id MIN_SEQ_ID
-                        Minimum sequence identity for clustering (default: 0.6).
-  --coverage COVERAGE   Minimum coverage for clustering (default: 0.8).
-  --sensitivity SENSITIVITY
-                        Sensitivity for clustering (default: 7.5).
-  --compare             Compare original clusters with assigned clusters.
-
-Feature selection and modeling:
-  --filter_type FILTER_TYPE
-                        Filter type for the input data ('none', 'strain', 'phage', 'dataset'; default: none).
-  --method {rfe,select_k_best,chi_squared,lasso,shap}
-                        Feature selection method ('rfe', 'select_k_best', 'chi_squared', 'lasso', 'shap'; default: rfe).
-  --num_features NUM_FEATURES
-                        Number of features to select (default: 100).
-  --num_runs_fs NUM_RUNS_FS
-                        Number of feature selection iterations to run (default: 10).
-  --num_runs_modeling NUM_RUNS_MODELING
-                        Number of runs per feature table for modeling (default: 10).
-
-General:
-  --threads THREADS     Number of threads to use (default: 4).
-```
-
-Example usage:
+#### Complete Workflow
 
 ```bash
-run-full-workflow --input_host /path/to/host/fasta --input_phage /path/to/phage/fasta --interaction_matrix /path/to/interaction_matrix.csv --output /path/to/output_dir --threads 4 --num_features 100 --num_runs_fs 10 --num_runs_modeling 20
+genophi protein-family-workflow \
+    --input_strain strain_fastas/ \
+    --input_phage phage_fastas/ \
+    --phenotype_matrix interactions.csv \
+    --output results/ \
+    --threads 8 \
+    --num_features 100 \
+    --num_runs_fs 25 \
+    --num_runs_modeling 50 \
+    --method rfe \
+    --filter_type strain
 ```
 
-__Python__:
-
-```python
-from phage_modeling.workflows.full_workflow import run_full_workflow
-
-run_full_workflow(
-    input_path_strain="/path/to/host/fasta",
-    input_path_phage="/path/to/phage/fasta",
-    interaction_matrix="/path/to/interaction_matrix.csv",
-    output_dir="/path/to/output_dir",
-    threads=4,
-    num_features=100,
-    num_runs_fs=10,
-    num_runs_modeling=20
-)
+**Output Structure:**
+```
+results/
+├── clustering/              # MMseqs2 databases and clusters
+├── feature_tables/          # Generated feature tables
+├── feature_selection/       # Selected features and occurrence counts
+├── modeling_results/        # Models and performance metrics
+│   ├── cutoff_5/, cutoff_10/, ...
+│   ├── model_performance/   # Summary plots
+│   └── models/             # Trained models for prediction
+└── workflow_report.txt     # Performance and timing summary
 ```
 
-#### Inputs:
-- `input_host`: Directory or file containing FASTA sequences of host gene AA sequences.
-- `input_phage`: Directory or file containing FASTA sequences of phage gene AA sequences.
-- `interaction_matrix`: CSV file with validated phage-host interactions (default headers: ['strain', 'phage', 'interaction']).
-- `strain_list (optional)`: CSV file with list of strains in the input directory to process. Values in the list must match strain filenames in `<strain>.faa` or `<strain>.<suffix>`. If not provided, all genomes in input directory will be used.
-- `phage_list (optional)`: CSV file with list of phages in the input directory to process. Values in the list must match phage filenames in `<phage>.faa` or `<phage>.<suffix>`. If not provided, all genomes in input directory will be used.
-- `output_dir`: Directory to save the generated outputs.
-- `threads`: Number of threads to use for processing.
-- `tmp_dir`: Directory for temporary files during the workflow.
-- `num_features`: Number of features to select during feature selection.
-- `num_runs_fs`: Number of runs for feature selection to identify optimal features.
-- `num_runs_modeling`: Number of runs for the modeling step, each with different random training/testing splits.
-- `method`: Feature selection method (options: 'rfe', 'select_k_best', 'chi_squared', 'lasso', 'shap')
+#### Single-Strain Phenotype Prediction
 
-#### Outputs:
-- `presence_absence_matrix.csv`: Feature matrix indicating gene family presence/absence.
-- `strain_feature_table.csv`: Feature table with collapsed features representing strain protein families.
-- `phage_feature_table.csv`: Feature table with collapsed features representing phage protein families.
-- `best_model.pkl`: Trained model after feature selection and modeling (`num_runs_modeling` models will be generated from random training/testing splits).
-- `all_predictions.csv`: Predictions of host-phage interactions, with confidence scores, from all models.
-- `mean_predictions.csv`: Aggregated predictions of phage-host interactions across all models, showing mean prediction scores.
-- `roc_curve.png`: Receiver Operating Characteristic (ROC) curve of model performance.
-- `precision_recall_curve.png`: Precision-Recall curve of model performance.
-
-__Output Directory Structure__:
+For strain-level phenotypes (no phage data required):
 
 ```bash
-<output_directory>/
+genophi protein-family-workflow \
+    --input_strain strain_fastas/ \
+    --phenotype_matrix strain_phenotypes.csv \
+    --output results/ \
+    --threads 8 \
+    --sample_column strain \
+    --phenotype_column antibiotic_resistance \
+    --task_type classification \
+    --filter_type none
+```
+
+**Phenotype Matrix Format:**
+```csv
+strain,antibiotic_resistance
+Strain_001,1
+Strain_002,0
+Strain_003,1
+```
+
+For regression:
+```bash
+--task_type regression \
+--phenotype_column growth_rate
+```
+
+### 2. Full Workflow: Protein Families → Predictive _K_-mers
+
+This workflow first identifies predictive protein families, then extracts _k_-mers specifically from those families for refined modeling. This combines the interpretability of protein families with the resolution of _k_-mer analysis.
+
+```bash
+genophi full-workflow \
+    --input_strain strain_fastas/ \
+    --input_phage phage_fastas/ \
+    --phenotype_matrix interactions.csv \
+    --output results/ \
+    --k 5 \
+    --threads 8
+```
+
+**Workflow Steps:**
+1. Cluster proteins into families
+2. Perform feature selection on protein families
+3. Extract _k_-mers from predictive protein families only
+4. Train models on _k_-mer features
+5. Generate annotations for predictive _k_-mers
+
+### 3. _K_-mer Workflow (_De Novo_)
+
+Generate _k_-mer features from all proteins without prior protein family analysis:
+
+```bash
+genophi kmer-workflow \
+    --input_strain strain_fastas/ \
+    --input_phage phage_fastas/ \
+    --phenotype_matrix interactions.csv \
+    --output kmer_results/ \
+    --k 4 \
+    --threads 8 \
+    --num_features 100 \
+    --num_runs_fs 25 \
+    --num_runs_modeling 50
+```
+
+**_K_-mer Specific Parameters:**
+- `--k 4`: _K_-mer length (default: 4)
+- `--k_range`: Generate _k_-mers from length 3 to k
+- `--one_gene`: Include features with only one gene (default: False)
+
+**Advanced Options:**
+```bash
+--use_dynamic_weights \        # Apply dynamic weighting
+--weights_method inverse_frequency \       # Weighting method
+--use_feature_clustering \     # Pre-filter by cluster presence
+--feature_n_clusters 20        # Number of feature clusters
+```
+
+### 4. Modular Step-by-Step Workflows
+
+#### Step 1: Clustering and Feature Generation
+
+```bash
+genophi cluster \
+    --input_strain strain_fastas/ \
+    --input_phage phage_fastas/ \
+    --phenotype_matrix interactions.csv \
+    --output clustering_results/ \
+    --min_seq_id 0.4 \
+    --coverage 0.8 \
+    --sensitivity 7.5 \
+    --threads 8
+```
+
+**Clustering Parameters:**
+- `--min_seq_id 0.4`: Minimum sequence identity (range: 0-1)
+- `--coverage 0.8`: Minimum coverage (range: 0-1)  
+- `--sensitivity 7.5`: MMseqs2 sensitivity (higher = more sensitive, slower)
+
+#### Step 2: Feature Selection
+
+Feature selection works on **any** feature table with a phenotype column:
+
+```bash
+genophi select-features \
+    --input feature_table.csv \
+    --output feature_selection/ \
+    --method rfe \
+    --num_features 100 \
+    --num_runs 25 \
+    --filter_type strain \
+    --phenotype_column interaction \
+    --threads 8
+```
+
+**Feature Selection Methods:**
+- `rfe`: Recursive Feature Elimination (recommended)
+- `shap_rfe`: RFE using SHAP values
+- `select_k_best`: ANOVA F-test (fast)
+- `chi_squared`: Chi-squared test
+- `lasso`: L1 regularization
+- `shap`: Direct SHAP importance
+
+**Advanced Selection Options:**
+```bash
+--use_dynamic_weights \               # Handle imbalanced features
+--weights_method inverse_frequency \  # Weighting strategy
+--use_clustering \                    # Group correlated features
+--cluster_method hierarchical \       # Clustering algorithm
+--n_clusters 20                       # Number of clusters
+```
+
+#### Step 3: Model Training
+
+Train models from selected features or any feature table:
+
+```bash
+genophi train \
+    --input_dir feature_selection/filtered_feature_tables \
+    --output models/ \
+    --num_runs 50 \
+    --phenotype_column interaction \
+    --threads 8
+```
+
+For regression tasks:
+```bash
+--task_type regression \
+--phenotype_column efficiency
+```
+
+#### Step 4: Select-and-Train (Combined)
+
+Run feature selection and modeling together from **any feature table**:
+
+```bash
+genophi select-and-train \
+    --input custom_feature_table.csv \
+    --output results/ \
+    --method rfe \
+    --num_features 100 \
+    --num_runs_fs 25 \
+    --num_runs_modeling 50 \
+    --phenotype_column your_phenotype \
+    --sample_column your_sample_id \
+    --threads 8
+```
+
+This command is flexible and works with:
+- Protein family features
+- _K_-mer features  
+- Custom features
+- Any feature table with any phenotype / output column
+
+### 5. Prediction Workflows
+
+#### Assign Features and Predict (Protein Families)
+
+```bash
+genophi assign-predict \
+    --input_dir new_strains/ \
+    --mmseqs_db results/tmp/strain/mmseqs_db \
+    --clusters_tsv results/strain/clusters.tsv \
+    --feature_map results/strain/features/selected_features.csv \
+    --model_dir results/modeling_results/cutoff_* \
+    --phage_feature_table results/phage/features/feature_table.csv \
+    --output predictions/ \
+    --genome_type strain
+```
+
+For new phages:
+```bash
+--input_dir new_phages/ \
+--mmseqs_db results/tmp/phage/mmseqs_db \
+--clusters_tsv results/phage/features/selected_features.csv \
+--strain_feature_table results/strain/features/feature_table.csv \
+--genome_type phage
+```
+
+#### _K_-mer Assignment and Prediction
+
+```bash
+genophi kmer-assign-predict \
+    --input_dir new_strains/ \
+    --mmseqs_db results/tmp/strain/mmseqs_db \
+    --clusters_tsv results/strain/clusters.tsv \
+    --feature_map results/strain/features/selected_features.csv \
+    --filtered_kmers kmer_results/kmer_tables/filtered_kmers.csv \
+    --aa_sequence_file kmer_results/kmer_tables/aa_sequences.faa \
+    --model_dir kmer_results/modeling/modeling_results/cutoff_* \
+    --output predictions/ \
+    --genome_type strain
+```
+
+### 6. Feature Annotation
+
+Identifies proteins associated predictive protein families or _k_-mers and merges with functional information:
+
+```bash
+genophi annotate \
+    --selected_features feature_selection/filtered_feature_tables/select_feature_table_cutoff_3.csv \
+    --feature_map strain/features/feature_map.csv \
+    --clusters_tsv clustering_results/clustering/selected_features.csv \
+    --annotation_table annotations.csv \
+    --aa_sequence_file all_sequences.faa \
+    --output annotations/ \
+    --feature_type strain
+```
+
+## Input Data Formats
+
+### FASTA Files
+
+Protein sequences in FASTA format (.faa files):
+```
+>protein_id_1
+MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQAPILSRVGDGTQDNLSGAEKAVQVKVKALPDAQFEVVHSLAKWKRQ...
+>protein_id_2
+MRISTTITTTITITTGNGAG...
+```
+
+**Important**: Protein IDs must be unique across all genomes. If duplicates exist, GenoPHI will automatically prefix them with genome names.
+
+### Phenotype Matrix
+
+#### Phage-Host Interactions
+
+Binary classification (infection/no infection):
+```csv
+strain,phage,interaction
+Strain_001,Phage_A,1
+Strain_001,Phage_B,0
+Strain_002,Phage_A,1
+```
+
+Regression (infection efficiency):
+```csv
+strain,phage,efficiency
+Strain_001,Phage_A,0.85
+Strain_001,Phage_B,0.12
+Strain_002,Phage_A,0.93
+```
+
+#### Single-Strain Phenotypes
+
+Classification:
+```csv
+strain,antibiotic_resistance
+Strain_001,1
+Strain_002,0
+Strain_003,1
+```
+
+Regression:
+```csv
+strain,growth_rate
+Strain_001,0.42
+Strain_002,0.38
+Strain_003,0.51
+```
+
+**Column Names**: Use `--strain_column`, `--phage_column`, `--sample_column`, and `--phenotype_column` to specify your column names.
+
+## Feature Selection Methods
+
+| Method | Description | Best For | Speed |
+|--------|-------------|----------|-------|
+| **RFE (recommended)** | Recursive Feature Elimination | General use, balanced performance | Medium |
+| **SHAP-RFE** | RFE using SHAP values | Model-agnostic importance | Slow (High RAM) |
+| **SelectKBest** | ANOVA F-test | Fast screening, linear relationships | Fast |
+| **Chi-squared** | χ² test for independence | Categorical features | Fast |
+| **Lasso** | L1 regularized regression | Sparse models, multicollinearity | Fast |
+| **SHAP** | Shapley Additive Explanations | Direct feature importance | Slow (High RAM) |
+
+### Dynamic Weighting
+
+Handle imbalanced feature distributions:
+
+```bash
+--use_dynamic_weights \
+--weights_method inverse_frequency  # or log10, balanced
+```
+
+**When to use:**
+- Features with highly variable occurrence frequencies
+- Some features present in most genomes, others very rare
+- Imbalanced positive/negative examples
+
+### Clustering-Based Selection
+
+Group correlated features for more robust selection:
+
+```bash
+--use_clustering \
+--cluster_method hierarchical \  # or hdbscan
+--n_clusters 20
+```
+
+**HDBSCAN Options:**
+```bash
+--cluster_method hdbscan \
+--min_cluster_size 5 \
+--min_samples 5 \
+--cluster_selection_epsilon 0.0
+```
+
+## Performance Metrics
+
+### Classification Metrics
+
+- **AUC-ROC (Area Under ROC Curve)**: Overall discriminative ability
+  $$\text{AUC} = \int_{0}^{1} \text{TPR}(\text{FPR}) \, d\text{FPR}$$
+
+- **MCC (Matthews Correlation Coefficient)**: Balanced metric for all confusion matrix elements
+  $$\text{MCC} = \frac{TP \times TN - FP \times FN}{\sqrt{(TP + FP)(TP + FN)(TN + FP)(TN + FN)}}$$
+
+- **Precision**: Proportion of true positives among predicted positives
+  $$\text{Precision} = \frac{TP}{TP + FP}$$
+
+- **Recall (Sensitivity)**: Proportion of true positives among actual positives  
+  $$\text{Recall} = \frac{TP}{TP + FN}$$
+
+- **F1 Score**: Harmonic mean of precision and recall
+  $$F1 = 2 \times \frac{\text{Precision} \times \text{Recall}}{\text{Precision} + \text{Recall}}$$
+
+- **Accuracy**: Overall correct predictions
+  $$\text{Accuracy} = \frac{TP + TN}{TP + TN + FP + FN}$$
+
+### Regression Metrics
+
+- **RMSE**: Root Mean Squared Error
+- **MAE**: Mean Absolute Error
+- **R²**: Coefficient of determination
+
+### Visualization Outputs
+
+GenoPHI generates comprehensive visualizations:
+
+**Per-Run Plots** (`modeling_results/cutoff_*/run_*/`):
+- Confusion matrices (classification)
+- ROC curves with AUC scores
+- Precision-Recall curves
+- SHAP feature importance bar plots
+- SHAP value scatter plots (beeswarm)
+
+**Summary Plots** (`modeling_results/model_performance/`):
+- SHAP beeswarm plots across all runs
+- ROC curve comparisons across feature selection cutoffs
+- Precision-Recall curve comparisons
+- Hit rate and hit ratio curves
+
+Example visualizations from the original README:
+
+![SHAP Summary](images/cutoff_5_shap_beeswarm.png)
+*SHAP feature importance summary*
+
+![ROC Curves](images/roc_curve.png)  
+*ROC curves comparing different feature selection cutoffs*
+
+![Precision-Recall](images/pr_curve.png)
+*Precision-Recall curves*
+
+![Hit Rate](images/hit_rate_curve.png)
+*Hit rate analysis*
+
+![Hit Ratio](images/hit_ratio_curve.png)
+*Hit ratio analysis*
+
+## Output Directory Structure
+
+### Protein Family Workflow
+
+```
+output_dir/
+├── clustering/
+│   ├── strain_db/              # MMseqs2 database
+│   ├── strain_clusters.tsv     # Cluster assignments
+│   ├── phage_db/               # Phage database (optional)
+│   └── phage_clusters.tsv
+├── feature_tables/
+│   ├── strain_feature_table.csv
+│   ├── phage_feature_table.csv  # If phages provided
+│   ├── merged_feature_table.csv
+│   └── feature_map.csv
 ├── feature_selection/
-│   ├── features_occurrence.csv          # Occurrence of features across genomes
-│   ├── filtered_feature_tables/         # Contains filtered feature tables after feature selection
-│   ├── run_X/                           # Individual feature selection runs (X indicates run number)
-│   └── catboost_info/                   # Directory with CatBoost model logs and details
-├── merged/
-│   └── full_feature_table.csv           # Combined feature table for phage and strain genomes
+│   ├── selected_features/
+│   │   ├── run_1_selected_features.csv
+│   │   └── ...
+│   ├── feature_occurrence_counts.csv
+│   └── filtered_feature_tables/
+│       ├── cutoff_5_feature_table.csv
+│       ├── cutoff_10_feature_table.csv
+│       └── ...
 ├── modeling_results/
-│   ├── cutoff_X/                        # Modeling results at different feature selection cutoffs (X indicates cutoff value)
-│   ├── model_performance/               # Contains performance evaluation files of the models (figures and performance metrics)
-│   ├── select_features_model_performance.csv # Overall performance metrics of all models generated with selected features
-│   └── select_features_model_predictions.csv # Predictions made by the final model on the test set
-├── phage/
-│   ├── assigned_clusters.tsv            # Cluster assignments for phage genomes
-│   ├── best_hits.tsv                    # Best cluster hits for phage sequences
-│   ├── clusters.*                       # MMseqs2 clustering files for phage genomes
-│   ├── clusters.tsv                     # Phage cluster results in TSV format
-│   ├── features/                        # Directory containing feature-related files for phages
-│   └── presence_absence_matrix.csv      # Presence-absence matrix for phage genomes
-├── strain/
-│   ├── assigned_clusters.tsv            # Cluster assignments for strain genomes
-│   ├── best_hits.tsv                    # Best cluster hits for strain sequences
-│   ├── clusters.*                       # MMseqs2 clustering files for strain genomes
-│   ├── clusters.tsv                     # Strain cluster results in TSV format
-│   ├── features/                        # Directory containing feature-related files for strains
-│   └── presence_absence_matrix.csv      # Presence-absence matrix for strain genomes
-├── tmp/
-│   ├── phage/                           # Temporary files used during processing of phage genomes
-│   └── strain/                          # Temporary files used during processing of strain genomes
+│   ├── cutoff_5/
+│   │   ├── run_1/, run_2/, ...
+│   │   └── cutoff_5_combined_performance.csv
+│   ├── cutoff_10/
+│   ├── model_performance/
+│   │   ├── shap_summary_plots/
+│   │   ├── roc_curve.png
+│   │   ├── pr_curve.png
+│   │   └── performance_comparison.csv
+│   └── models/
+│       ├── run_1/best_model.pkl
+│       └── ...
+├── predictions/
+│   ├── predicted_interactions.csv
+│   └── prediction_confidence.csv
+└── workflow_report.txt
 ```
 
-### Assign and Predict Workflow
+### _K_-mer Workflow
 
-The `assign_predict` workflow involves assigning new sequences to pre-existing clusters, generating feature tables for new genomes, and making predictions of phage-host interactions using pre-trained models.
-
-#### Workflow Overview:
-
-1. __Assign Sequences to Clusters__: New genome sequences are assigned to existing MMseqs2 clusters based on similarity to previously clustered sequences. This step generates the cluster assignments for the new genomes.
-
-2. __Feature Table Generation__: A feature table is created for each new genome based on the clusters they were assigned to. This table is used as input for interaction prediction models.
-
-3. __Interaction Prediction__: Pre-trained models are used to predict interactions between new genomes (e.g., strains) and phages. The predictions are saved with confidence scores for each interaction.
-
-__CLI__:
-
-Help message:
-
-```bash
-usage: run-assign-and-predict-workflow [-h] --input_dir INPUT_DIR [--genome_list GENOME_LIST] [--genome_type {strain,phage}] [--genome_column GENOME_COLUMN] --mmseqs_db MMSEQS_DB --clusters_tsv CLUSTERS_TSV --feature_map FEATURE_MAP --tmp_dir
-                                       TMP_DIR [--suffix SUFFIX] --model_dir MODEL_DIR --phage_feature_table PHAGE_FEATURE_TABLE --output_dir OUTPUT_DIR [--sensitivity SENSITIVITY] [--coverage COVERAGE] [--min_seq_id MIN_SEQ_ID]
-                                       [--threads THREADS]
-
-Assign new genes to existing clusters and predict interactions.
-
-options:
-  -h, --help            show this help message and exit
-  --input_dir INPUT_DIR
-                        Directory containing new genome FASTA files.
-  --genome_list GENOME_LIST
-                        CSV file with genome names.
-  --genome_type {strain,phage}
-                        Type of genome to process.
-  --genome_column GENOME_COLUMN
-                        Column name for genome identifiers in genome_list.
-  --mmseqs_db MMSEQS_DB
-                        Path to the existing MMseqs2 database.
-  --clusters_tsv CLUSTERS_TSV
-                        Path to the clusters TSV file.
-  --feature_map FEATURE_MAP
-                        Path to the feature map (selected_features.csv).
-  --tmp_dir TMP_DIR     Temporary directory for intermediate files.
-  --suffix SUFFIX       Suffix for FASTA files.
-  --model_dir MODEL_DIR
-                        Directory with trained models.
-  --phage_feature_table PHAGE_FEATURE_TABLE
-                        Path to the phage feature table.
-  --output_dir OUTPUT_DIR
-                        Directory to save results.
-  --sensitivity SENSITIVITY
-                        Sensitivity for MMseqs2 search.
-  --coverage COVERAGE   Minimum coverage for assignment.
-  --min_seq_id MIN_SEQ_ID
-                        Minimum sequence identity for assignment.
-  --threads THREADS     Number of threads for MMseqs2.
+```
+output_dir/
+├── clustering/                  # Protein family clustering
+├── kmer_tables/
+│   ├── kmer_feature_table.csv
+│   ├── feature_map.csv
+│   ├── filtered_kmers.csv
+│   ├── feature2cluster.csv
+│   └── aa_sequences.faa
+├── feature_selection/
+├── modeling_results/
+└── kmer_workflow_report.txt
 ```
 
-Example usage:
+## Python API
 
-```bash
-run-assign-and-predict-workflow --input_dir /path/to/genome/fasta --genome_list /path/to/genome_list.csv --genome_type strain --mmseqs_db /path/to/mmseqs_db --clusters_tsv /path/to/clusters.tsv --feature_map /path/to/selected_features.csv --output_dir /path/to/output_dir --tmp_dir /path/to/tmp_dir --model_dir /path/to/model_dir --phage_feature_table /path/to/phage_feature_table.csv --threads 4
-```
-
-__Python__:
+GenoPHI can also be used programmatically:
 
 ```python
-from phage_modeling.workflows.assign_predict_workflow import run_assign_and_predict_workflow
-
-run_assign_and_predict_workflow(
-    input_dir="/path/to/genome/fasta",
-    genome_list="/path/to/genome_list.csv",
-    genome_type="strain",  # or "phage"
-    genome_column=None,  # If your genome list file has a specific column for genomes
-    mmseqs_db="/path/to/mmseqs_db",
-    clusters_tsv="/path/to/clusters.tsv",
-    feature_map="/path/to/selected_features.csv",
-    tmp_dir="/path/to/tmp_dir",
-    model_dir="/path/to/model_dir",
-    phage_feature_table="/path/to/phage_feature_table.csv",
-    output_dir="/path/to/output_dir",
-    threads=4
+from genophi.workflows import (
+    run_protein_family_workflow,
+    run_kmer_workflow,
+    run_modeling_workflow_from_feature_table,
+    assign_predict_workflow
 )
-```
 
-#### Inputs:
-- `input_dir`: Directory containing FASTA files for new genomes.
-- `genome_list`: CSV file with the list of genomes to process (e.g., phages or strains). 
-- `genome_type`: Type of genome to process (`strain` or `phage`).
-- `genome_column`: Optional column name from `genome_list` to use for genome identification.
-- `mmseqs_db`: Path to the existing MMseqs2 database used for assigning clusters.
-- `clusters_tsv`: TSV file of cluster assignments.
-- `feature_map`: CSV file with selected features for the genome.
-- `tmp_dir`: Directory for temporary files during the workflow.
-- `model_dir`: Directory containing pre-trained models for interaction prediction.
-- `phage_feature_table`: CSV file with feature table of phage genomes.
-- `output_dir`: Directory to save the generated feature tables and predictions.
-- `threads`: Number of threads to use for processing.
-
-#### Outputs:
-- `*_feature_table.csv`: Feature tables for each genome, indicating the presence/absence of gene families based on clustering.
-- `all_predictions.csv`: Predictions of interactions between phages and hosts with confidence scores.
-- `mean_predictions.csv`: Aggregated predictions showing the mean prediction score for each phage-host pair.
-
-### Clustering and Feature Table Generation
-
-The clustering and feature table generation step involves clustering protein sequences from phage and host genomes using MMseqs2. It generates a presence-absence matrix representing the gene families identified from both phages and hosts and prepares the feature tables for use in machine learning models.
-
-__CLI__:
-
-Help message:
-
-```bash
-usage: run-clustering-workflow [-h] -ih INPUT_STRAIN -ip INPUT_PHAGE -im INTERACTION_MATRIX -o OUTPUT [--tmp TMP] [--min_seq_id MIN_SEQ_ID] [--coverage COVERAGE] [--sensitivity SENSITIVITY] [--suffix SUFFIX] [--threads THREADS]
-                               [--strain_list STRAIN_LIST] [--strain_column STRAIN_COLUMN] [--phage_list PHAGE_LIST] [--phage_column PHAGE_COLUMN] [--compare] [--source_strain SOURCE_STRAIN] [--source_phage SOURCE_PHAGE]
-
-Run full feature table generation and merging workflow.
-
-options:
-  -h, --help            show this help message and exit
-  -ih INPUT_STRAIN, --input_strain INPUT_STRAIN
-                        Input path for strain clustering (directory or file).
-  -ip INPUT_PHAGE, --input_phage INPUT_PHAGE
-                        Input path for phage clustering (directory or file).
-  -im INTERACTION_MATRIX, --interaction_matrix INTERACTION_MATRIX
-                        Path to the interaction matrix.
-  -o OUTPUT, --output OUTPUT
-                        Output directory to save results.
-  --tmp TMP             Temporary directory for intermediate files.
-  --min_seq_id MIN_SEQ_ID
-                        Minimum sequence identity for clustering.
-  --coverage COVERAGE   Minimum coverage for clustering.
-  --sensitivity SENSITIVITY
-                        Sensitivity for clustering.
-  --suffix SUFFIX       Suffix for input FASTA files.
-  --threads THREADS     Number of threads to use.
-  --strain_list STRAIN_LIST
-                        Path to a strain list file for filtering.
-  --strain_column STRAIN_COLUMN
-                        Column in the strain list containing strain names.
-  --phage_list PHAGE_LIST
-                        Path to a phage list file for filtering.
-  --phage_column PHAGE_COLUMN
-                        Column in the phage list containing phage names.
-  --compare             Compare original clusters with assigned clusters.
-  --source_strain SOURCE_STRAIN
-                        Prefix for naming selected features for strain in the assignment step.
-  --source_phage SOURCE_PHAGE
-                        Prefix for naming selected features for phage in the assignment step.
-```
-
-Example usage:
-
-```bash
-run-clustering-workflow --input_host /path/to/host/fasta --input_phage /path/to/phage/fasta --interaction_matrix /path/to/interaction_matrix.csv --output /path/to/output_dir --threads 4
-```
-
-__Python__:
-
-```python
-from phage_modeling.workflows.feature_table_workflow import run_full_feature_workflow
-
-run_full_feature_workflow(
-    input_path_strain="/path/to/host/fasta",
-    input_path_phage="/path/to/phage/fasta",
-    interaction_matrix="/path/to/interaction_matrix.csv",
-    output_dir="/path/to/output_dir",
-    threads=4
-)
-```
-
-### Feature Selection
-
-Perform feature selection on your generated feature table using recursive feature elimination (RFE) with the following command:
-
-__CLI__:
-
-Help message:
-
-```bash
-usage: run-feature-selection-workflow [-h] -i INPUT -o OUTPUT [--threads THREADS] [--num_features NUM_FEATURES] [--filter_type FILTER_TYPE] [--num_runs NUM_RUNS] [--method {rfe,select_k_best,chi_squared,lasso,shap}]
-
-Run feature selection workflow.
-
-options:
-  -h, --help            show this help message and exit
-  -i INPUT, --input INPUT
-                        Input path for the full feature table.
-  -o OUTPUT, --output OUTPUT
-                        Base output directory for the results.
-  --threads THREADS     Number of threads to use.
-  --num_features NUM_FEATURES
-                        Number of features to select during feature selection.
-  --filter_type FILTER_TYPE
-                        Type of filtering to use ('none', 'strain', 'phage').
-  --num_runs NUM_RUNS   Number of feature selection iterations to run.
-  --method {rfe,select_k_best,chi_squared,lasso,shap}
-                        Feature selection method to use ('rfe', 'select_k_best', 'chi_squared', 'lasso', 'shap').
-```
-
-Usage example:
-
-```bash
-run-feature-selection-workflow --input /path/to/merged_feature_table.csv --output /path/to/output_dir --threads 4 --num_features 100 --num_runs_fs 50
-```
-
-__Python__:
-
-```python
-from phage_modeling.workflows.feature_selection_workflow import run_feature_selection_workflow
-
-run_feature_selection_workflow(
-    input_path="/path/to/merged_feature_table.csv",
-    base_output_dir="/path/to/output_dir",
-    threads=4,
+# Recommended: Protein family workflow
+run_protein_family_workflow(
+    input_path_strain="strain_fastas/",
+    input_path_phage="phage_fastas/",
+    phenotype_matrix="interactions.csv",
+    output_dir="results/",
+    threads=8,
     num_features=100,
-    num_runs_fs=10
+    num_runs_fs=50,
+    num_runs_modeling=100,
+    method='rfe',
+    filter_type='strain'
+)
+
+# _K_-mer workflow
+run_kmer_workflow(
+    input_strain_dir="strain_fastas/",
+    input_phage_dir="phage_fastas/",
+    phenotype_matrix="interactions.csv",
+    output_dir="kmer_results/",
+    k=5,
+    threads=8,
+    num_features=100
+)
+
+# Feature selection and modeling from any feature table
+run_modeling_workflow_from_feature_table(
+    full_feature_table="custom_features.csv",
+    output_dir="modeling_results/",
+    phenotype_column="your_phenotype",
+    sample_column="your_sample_id",
+    num_features=100,
+    num_runs_fs=50,
+    num_runs_modeling=100,
+    method='rfe'
+)
+
+# Prediction workflow
+assign_predict_workflow(
+    input_dir="new_genomes/",
+    mmseqs_db="results/tmp/strain/mmseqs_db",
+    clusters_tsv="results/strain/clusters.tsv",
+    feature_map="results/strain/features/selected_features.csv",
+    model_dir="results/modeling_results/cutoff_*",
+    output_dir="predictions/",
+    genome_type='strain',
+    phage_feature_table_path="results/phage/features/feature_table.csv"
 )
 ```
 
-### Modeling Workflow
+## Advanced Usage
 
-Run the modeling workflow using selected features and evaluate model performance using metrics such as MCC, AUC, F1-Score, Precision and Recall. Generates performance plots to evaluate and compare feature selection thresholds.
+### Custom Train-Test Splits
 
-__CLI__:
-
-Help message:
+Control how data is split for model evaluation:
 
 ```bash
-usage: run-modeling-workflow [-h] -i INPUT_DIR -o OUTPUT_DIR [--threads THREADS] [--num_runs NUM_RUNS] [--set_filter SET_FILTER] [--sample_column SAMPLE_COLUMN] [--phenotype_column PHENOTYPE_COLUMN]
-
-Run modeling workflow on selected feature tables.
-
-options:
-  -h, --help            show this help message and exit
-  -i INPUT_DIR, --input_dir INPUT_DIR
-                        Directory containing selected feature tables.
-  -o OUTPUT_DIR, --output_dir OUTPUT_DIR
-                        Directory to save results of the experiments.
-  --threads THREADS     Number of threads to use.
-  --num_runs NUM_RUNS   Number of runs per feature table.
-  --set_filter SET_FILTER
-                        Filter for dataset ('none', 'strain', 'phage', 'dataset').
-  --sample_column SAMPLE_COLUMN
-                        Column name for the sample identifier (optional).
-  --phenotype_column PHENOTYPE_COLUMN
-                        Column name for the phenotype (optional).
+--filter_type none      # Random split
+--filter_type strain    # Leave-strain-out (test on new strains)
+--filter_type phage     # Leave-phage-out (test on new phages)
 ```
 
-Example usage:
+**Recommendation**: Use `--filter_type strain` for phage-host predictions to evaluate generalization to new strains.
+
+### Hyperparameter Tuning
+
+Models use grid search for hyperparameter optimization. Default parameters are optimized for phage-host interaction prediction but can be customized in the code.
+
+### Handling Large Datasets
+
+For large datasets, adjust memory and threading:
 
 ```bash
-run-modeling-workflow --input_dir /path/to/filtered_feature_tables --output_dir /path/to/output_dir --threads 4 --num_runs 100
+--max_ram 64 \           # Maximum RAM in GB
+--threads 16 \           # Number of CPU threads
+--clear_tmp              # Remove temporary files after completion
 ```
 
-__Python__:
+### Regression Tasks
 
-```python
-from phage_modeling.workflows.modeling_workflow import run_modeling_workflow
+For continuous phenotypes:
 
-run_modeling_workflow(
-    input_dir="/path/to/filtered_feature_tables",
-    base_output_dir="/path/to/output_dir",
-    threads=4,
-    num_runs=10
-)
+```bash
+--task_type regression \
+--phenotype_column efficiency
 ```
 
-## License and Copyright
+GenoPHI will use appropriate regression metrics (RMSE, MAE, R²) instead of classification metrics.
+
+### Pre-processing Feature Clustering
+
+Filter features by cluster presence before modeling:
+
+```bash
+--use_feature_clustering \
+--feature_cluster_method hierarchical \
+--feature_n_clusters 20 \
+--feature_min_cluster_presence 2
+```
+
+This removes features that appear in fewer than `feature_min_cluster_presence` genome clusters.
+
+## Example Datasets
+
+To help you get started, we recommend testing GenoPHI with:
+
+### Test Dataset Structure
+
+Minimal test case with 10 strains, 5 phages:
+```
+test_data/
+├── strains/
+│   ├── Strain_001.faa
+│   ├── Strain_002.faa
+│   └── ...
+├── phages/
+│   ├── Phage_A.faa
+│   ├── Phage_B.faa
+│   └── ...
+└── interactions.csv
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Issue**: MMseqs2 not found
+```
+Solution: Ensure MMseqs2 is installed and in your PATH
+conda install -c bioconda mmseqs2
+which mmseqs  # Should show the path
+```
+
+**Issue**: Out of memory errors
+```
+Solution: 
+- Reduce --max_ram parameter
+- Process fewer genomes at once
+- Use --clear_tmp to remove intermediate files
+- Increase system swap space
+```
+
+**Issue**: Duplicate protein IDs
+```
+Solution: GenoPHI automatically detects and prefixes duplicates with genome names
+If you want to prevent this, ensure protein IDs are unique across all input files
+```
+
+**Issue**: No predictive features found
+```
+Solution: 
+- Try different feature selection methods (--method)
+- Adjust num_features parameter
+- Check that phenotype matrix has sufficient positive/negative examples
+- Verify that interaction matrix matches genome filenames
+```
+
+**Issue**: Poor model performance
+```
+Solution: 
+- Increase num_runs_fs and num_runs_modeling for more robust results
+- Try different feature selection methods
+- Use --use_dynamic_weights for imbalanced features
+- Enable --use_clustering for feature grouping
+- Check data quality and ensure phenotype matrix is correct
+- Try different clustering parameters (min_seq_id, coverage)
+```
+
+**Issue**: Models take too long to train
+```
+Solution:
+- Reduce num_runs_modeling
+- Reduce num_features
+- Increase --threads parameter
+- Use faster feature selection methods (select_k_best, chi_squared)
+```
+
+## Frequently Asked Questions (FAQ)
+
+### General Questions
+
+**Q: Can GenoPHI be used for organisms other than phages and bacteria?**  
+A: Yes! While designed for phage-host interactions, GenoPHI works with any protein sequences and phenotypes. It's been applied to bacteria, archaea, and eukaryotic microbes.
+
+**Q: How many genomes do I need for reliable predictions?**  
+A: Minimum: ~20 strains and 20 phages with ~400 interactions. Recommended: 50+ strains, 50+ phages, 5000+ interactions for robust models.
+
+**Q: What file formats are required?**  
+A: FASTA files (.faa) for protein sequences and CSV for phenotype matrices. See [Input Data Formats](#input-data-formats) for details.
+
+
+### Technical Questions
+
+**Q: What's the difference between protein family and _k_-mer approaches?**  
+A: Protein families group similar full-length proteins (interpretable, captures protein-level patterns). _K_-mers analyze short amino acid sequences (high resolution, captures local patterns). The `full-workflow` combines both by extracting _k_-mers from predictive protein families.
+
+**Q: Should I use single-strain or phage-host mode?**  
+A: Use phage-host mode for interaction prediction. Use single-strain mode for strain-level phenotypes (resistance, growth rate, etc.) where phage data isn't relevant.
+
+**Q: Which feature selection method should I use?**  
+A: Start with RFE (balanced performance). Try SHAP for interpretability or SelectKBest for speed. Compare multiple methods for best results.
+
+**Q: How do I interpret SHAP plots?**  
+A: SHAP beeswarm plots show feature importance. Features at the top are most important. Red dots = high feature values, blue = low. Position right of center = positive impact on prediction.
+
+**Q: Can I use custom features instead of protein families?**  
+A: Yes! Use `select-and-train` with any feature table containing a phenotype column (metabolic pathways, gene presence/absence, etc.).
+
+**Q: How do I handle imbalanced datasets?**  
+A: Use `--use_dynamic_weights` with `--weights_method inverse_frequency` to balance feature importance. CatBoost also has built-in class balancing.
+
+### Troubleshooting Questions
+
+**Q: Models perform poorly - what should I try?**  
+A: (1) Increase num_runs for more robust estimates, (2) Try different clustering parameters, (3) Enable dynamic weighting, (4) Check data quality and phenotype matrix accuracy.
+
+**Q: How much RAM do I need?**  
+A: Minimum 8 GB. Recommend 16+ GB for 50+ genomes, 32+ GB for 100+ genomes. Use `--max_ram` to limit memory usage.
+
+## Best Practices
+
+1. **Start with recommended defaults** for initial analysis
+2. **Use `--filter_type strain`** for phage-host predictions to evaluate generalization
+3. **Run multiple iterations** (`num_runs_fs = 25`, `num_runs_modeling = 50`) for robust results
+4. **Enable clustering** (`--use_clustering`) for correlated features
+5. **Check data quality** before modeling - ensure phenotype matrix matches genome filenames
+6. **Use SHAP plots** to understand which features drive predictions
+7. **Compare multiple feature selection methods** to find optimal features
+8. **For large datasets**, start with a subset to optimize parameters
+
+## Version History
+
+### v0.1.0 (Current)
+- Initial release
+- Protein family-based workflow with MMseqs2 clustering
+- _K_-mer-based workflow with flexible _k_-mer lengths
+- Multiple feature selection methods (RFE, SHAP, SelectKBest, Chi-squared, Lasso)
+- CatBoost model training with hyperparameter optimization
+- SHAP-based interpretability
+- Support for classification and regression tasks
+- Single-strain and phage-host prediction modes
+- Unified CLI with 12 commands
+- Comprehensive visualization outputs
+
+### Upcoming Features
+- Web interface for prediction and visualization
+- Docker container for easy deployment
+
+## Citation
+
+If you use GenoPHI in your research, please cite:
+
+```bibtex
+@software{genophi2025,
+  author = {Noonan, Avery},
+  title = {GenoPHI: Genotype-to-Phenotype Phage-Host Interaction Prediction},
+  year = {2025},
+  url = {https://github.com/Noonanav/GenoPHI},
+  version = {0.1.0}
+}
+```
+
+### Related Publications
+
+[Publications using GenoPHI will be listed here upon availability]
+
+## Contributing
+
+We welcome contributions to GenoPHI! Here's how you can help:
+
+### Ways to Contribute
+
+- **Report bugs** or suggest features via [GitHub Issues](https://github.com/Noonanav/GenoPHI/issues)
+- **Submit pull requests** for bug fixes or new features
+- **Improve documentation** by fixing typos or adding examples
+- **Share your use cases** and publications using GenoPHI
+- **Test on different platforms** and report compatibility issues
+
+### Development Guidelines
+
+1. Fork the repository and create a feature branch
+2. Follow PEP 8 style guidelines for Python code
+3. Add tests for new functionality
+4. Update documentation as needed
+5. Submit a pull request with a clear description of changes
+
+### Code of Conduct
+
+We are committed to providing a welcoming and inclusive environment. Please be respectful and constructive in all interactions.
+
+## License
 
 This software is available under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-This software is also subject to Lawrence Berkeley National Laboratory copyright. 
-See the [COPYRIGHT](COPYRIGHT) file for details.
+This software is subject to Lawrence Berkeley National Laboratory copyright. The U.S. Government retains certain rights as this software was developed under funding from the U.S. Department of Energy.
 
-This software was developed under funding from the U.S. Department of Energy and 
-the U.S. Government consequently retains certain rights.
+## Support
+
+For questions, issues, or feature requests:
+- Open an issue on [GitHub](https://github.com/Noonanav/GenoPHI/issues)
+- Contact: Avery Noonan (averynoonan@gmail.com)
+
+## Acknowledgments
+
+This was completed as part of the BRaVE Phage Foundry at Lawrence Berkeley National Laboratory which is supported by the U.S. Department of Energy, Office of Science, Office of Biological & Environmental Research under contract number DE-AC02-05CH11231. This work was also supported by the National Science Foundation (NSF) of the United States under grant award No. 2220735 (EDGE CMT: Predicting bacteriophage susceptibility from Escherichia coli genotype).
