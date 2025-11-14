@@ -465,9 +465,9 @@ def create_parser():
     # Clustering-based filtering (for samples)
     p.add_argument('--use_clustering', action='store_true',
                 help='Enable sample clustering for feature filtering')
-    p.add_argument('--cluster_method', default='hdbscan',
+    p.add_argument('--cluster_method', default='hierarchical',
                 choices=['hdbscan', 'hierarchical'],
-                help='Clustering method for samples (default: hdbscan)')
+                help='Clustering method for samples (default: hierarchical)')
     p.add_argument('--n_clusters', type=int, default=20,
                 help='Number of clusters for hierarchical (default: 20)')
     p.add_argument('--min_cluster_size', type=int, default=5,
