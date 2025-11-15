@@ -1,0 +1,332 @@
+import os
+import argparse
+import pandas as pd
+import logging
+from genophi.feature_selection import run_feature_selection_iterations, generate_feature_tables
+from genophi.select_feature_modeling import run_experiments
+from genophi.workflows.feature_annotations_workflow import run_predictive_proteins_workflow
+
+def setup_logging(output_dir, log_filename="protein_family_workflow.log"):
+    """
+    Set up logging to both console and file if logging is not already configured.
+
+    Args:
+        output_dir (str): Directory where the log file will be saved.
+        log_filename (str): Name of the log file. Default is "workflow.log".
+    """
+    if not logging.getLogger().hasHandlers():
+        os.makedirs(output_dir, exist_ok=True)
+        log_file = os.path.join(output_dir, log_filename)
+
+        # Configure root logger
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(log_file, mode='w'),  # Overwrite log file
+                logging.StreamHandler()
+            ]
+        )
+        logging.info("Logging initialized. Logs will be written to: %s", log_file)
+    else:
+        logging.info("Logging is already configured by the calling workflow.")
+
+def run_modeling_workflow_from_feature_table(
+    full_feature_table, 
+    output_dir, 
+    threads=4, 
+    num_features=100, 
+    filter_type='none',
+    num_runs_fs=10, 
+    num_runs_modeling=10, 
+    sample_column='strain', 
+    phage_column='phage',
+    phenotype_column='interaction',
+    method='rfe', 
+    annotation_table_path=None, 
+    protein_id_col="protein_ID",
+    feature2cluster_path=None, 
+    cluster2protein_path=None, 
+    fasta_dir_or_file=None,
+    run_predictive_proteins=False, 
+    phage_feature2cluster_path=None, 
+    phage_cluster2protein_path=None,
+    phage_fasta_dir_or_file=None, 
+    task_type='classification', 
+    binary_data=False, 
+    max_features='none',
+    use_dynamic_weights=False,
+    weights_method='log10',
+    use_clustering=True,
+    cluster_method='hdbscan',
+    n_clusters=20,
+    min_cluster_size=5,
+    min_samples=None,
+    cluster_selection_epsilon=0.0,
+    check_feature_presence=False,
+    filter_by_cluster_presence=False,
+    min_cluster_presence=2,
+    max_ram=8, 
+    use_shap=False
+):
+    """
+    Workflow for feature selection, modeling, and predictive protein extraction starting from a pre-generated full feature table.
+
+    Args:
+        full_feature_table (str): Path to the full feature table.
+        output_dir (str): Directory to save results.
+        threads (int): Number of threads to use.
+        num_features (int): Number of features to select.
+        filter_type (str): Filter type for the input data (default: 'none').
+        num_runs_fs (int): Number of feature selection iterations.
+        num_runs_modeling (int): Number of runs per feature table for modeling.
+        sample_column (str): Column name for the sample identifier.
+        phage_column (str): Column name for the phage identifier.
+        phenotype_column (str): Column name for the phenotype.
+        method (str): Feature selection method.
+        annotation_table_path (str, optional): Path to an optional annotation table for merging predictive protein annotations.
+        protein_id_col (str): Column name for protein IDs in the predictive_proteins DataFrame.
+        feature2cluster_path (str, optional): Path to the feature-to-cluster mapping file for strains.
+        cluster2protein_path (str, optional): Path to the cluster-to-protein mapping file for strains.
+        fasta_dir_or_file (str, optional): Path to a FASTA file or directory of FASTA files for strains.
+        run_predictive_proteins (bool): Whether to run the predictive proteins extraction step.
+        phage_feature2cluster_path (str, optional): Path to the feature-to-cluster mapping file for phages.
+        phage_cluster2protein_path (str, optional): Path to the cluster-to-protein mapping file for phages.
+        phage_fasta_dir_or_file (str, optional): Path to a FASTA file or directory for phages.
+        task_type (str): Either 'classification' or 'regression' (default: classification).
+        binary_data (bool): If True, converts feature values to binary (0/1).
+        max_features (str): Maximum number of features to include in the feature tables (default: 'none').
+        use_dynamic_weights (bool): If True, use dynamic weights for feature selection.
+        weights_method (str): Method to calculate class weights ('log10', 'inverse_frequency', 'balanced'). Default is 'log10'.
+        max_ram (int): Maximum RAM to use for feature selection iterations (default: 8).
+        use_shap (bool): If True, calculate and save SHAP values.
+        use_clustering (bool): If True, use clustering for train-test split.
+        cluster_method (str): Clustering method to use ('hdbscan' or 'hierarchical').
+        n_clusters (int): Number of clusters for hierarchical clustering (default: 20).
+        min_cluster_size (int): Minimum cluster size for HDBSCAN clustering.
+        min_samples (int): Minimum number of samples for HDBSCAN clustering.
+        cluster_selection_epsilon (float): Epsilon value for HDBSCAN clustering.
+        check_feature_presence (bool): If True, only include features present in both train and test sets.
+    """
+    setup_logging(output_dir)
+
+    # Step 1: Feature Selection
+    logging.info("Step : Running feature selection iterations...")
+    base_fs_output_dir = os.path.join(output_dir, 'feature_selection')
+    run_feature_selection_iterations(
+        input_path=full_feature_table,
+        base_output_dir=base_fs_output_dir,
+        threads=threads,
+        num_features=num_features,
+        filter_type=filter_type,
+        num_runs=num_runs_fs,
+        method=method,
+        sample_column=sample_column,
+        phenotype_column=phenotype_column,
+        phage_column=phage_column,
+        task_type=task_type,
+        max_ram=max_ram,
+        use_dynamic_weights=use_dynamic_weights,
+        weights_method=weights_method,
+        use_clustering=use_clustering,
+        cluster_method=cluster_method,
+        n_clusters=n_clusters,
+        min_cluster_size=min_cluster_size,
+        min_samples=min_samples,
+        cluster_selection_epsilon=cluster_selection_epsilon,
+        check_feature_presence=check_feature_presence,
+        filter_by_cluster_presence=filter_by_cluster_presence,
+        min_cluster_presence=min_cluster_presence
+    )
+
+    # Step 2: Generate feature tables from feature selection results
+    logging.info("Generating feature tables from feature selection results...")
+    max_features = None if max_features == 'none' else int(max_features)
+    filter_table_dir = os.path.join(base_fs_output_dir, 'filtered_feature_tables')
+    generate_feature_tables(
+        model_testing_dir=base_fs_output_dir,
+        full_feature_table_file=full_feature_table,
+        filter_table_dir=filter_table_dir,
+        phenotype_column=phenotype_column,
+        sample_column=sample_column,
+        cut_offs=[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 25, 27, 30, 32, 35, 37, 40, 42, 45, 47, 50],
+        binary_data=binary_data,
+        max_features=max_features,
+        filter_type=filter_type
+    )
+
+    # Step 3: Modeling
+    logging.info("Step 2: Running modeling experiments...")
+    modeling_output_dir = os.path.join(output_dir, 'modeling_results')
+    run_experiments(
+        input_dir=filter_table_dir,
+        base_output_dir=modeling_output_dir,
+        threads=threads,
+        num_runs=num_runs_modeling,
+        set_filter=filter_type,
+        sample_column=sample_column,
+        phage_column=phage_column,
+        phenotype_column=phenotype_column,
+        task_type=task_type,
+        binary_data=binary_data,
+        use_dynamic_weights=use_dynamic_weights,
+        weights_method=weights_method,
+        use_clustering=use_clustering,
+        cluster_method=cluster_method,
+        n_clusters=n_clusters,
+        min_cluster_size=min_cluster_size,
+        min_samples=min_samples,
+        cluster_selection_epsilon=cluster_selection_epsilon,
+        max_ram=max_ram,
+        use_shap=use_shap
+    )
+
+    # Conditional Step 4: Predictive Proteins Workflow
+    if run_predictive_proteins:
+        logging.info("Step 3: Selecting top-performing cutoff and running predictive proteins workflow...")
+        
+        metrics_file = os.path.join(modeling_output_dir, 'model_performance', 'model_performance_metrics.csv')
+        performance_df = pd.read_csv(metrics_file)
+        top_cutoff = performance_df.iloc[0]['cut_off'].split('_')[-1]
+
+        # Define paths based on selected top cutoff
+        feature_file_path = os.path.join(base_fs_output_dir, 'filtered_feature_tables', f'select_feature_table_cutoff_{top_cutoff}.csv')
+        predictive_proteins_output_dir = os.path.join(modeling_output_dir, 'model_performance', 'predictive_proteins')
+
+        # Run predictive proteins workflow for strain
+        if feature2cluster_path and cluster2protein_path:
+            run_predictive_proteins_workflow(
+                feature_file_path=feature_file_path,
+                feature2cluster_path=feature2cluster_path,
+                cluster2protein_path=cluster2protein_path,
+                fasta_dir_or_file=fasta_dir_or_file,
+                modeling_dir=os.path.join(modeling_output_dir, f'cutoff_{top_cutoff}'),
+                output_dir=predictive_proteins_output_dir,
+                output_fasta='predictive_AA_seqs_strain.faa',
+                protein_id_col=protein_id_col,
+                annotation_table_path=annotation_table_path,
+                feature_assignments_path=os.path.join(output_dir, 'strain', 'features', 'feature_assignments.csv'),
+                strain_column=sample_column
+            )
+
+        # Run predictive proteins workflow for phage, if phage parameters are provided
+        if phage_feature2cluster_path and phage_cluster2protein_path:
+            run_predictive_proteins_workflow(
+                feature_file_path=feature_file_path,
+                feature2cluster_path=phage_feature2cluster_path,
+                cluster2protein_path=phage_cluster2protein_path,
+                fasta_dir_or_file=phage_fasta_dir_or_file,
+                modeling_dir=os.path.join(modeling_output_dir, f'cutoff_{top_cutoff}'),
+                output_dir=predictive_proteins_output_dir,
+                output_fasta='predictive_AA_seqs_phage.faa',
+                protein_id_col=protein_id_col,
+                annotation_table_path=annotation_table_path,
+                feature_assignments_path=os.path.join(output_dir, 'phage', 'features', 'feature_assignments.csv'),
+                strain_column='phage'
+            )
+    else:
+        logging.info("Step 3: Predictive proteins workflow skipped.")
+
+# Main function for CLI
+def main():
+    parser = argparse.ArgumentParser(description='Workflow for feature selection, modeling, and optional predictive protein extraction from a pre-existing feature table.')
+
+    # Input arguments
+    input_group = parser.add_argument_group('Input data')
+    input_group.add_argument('-i', '--full_feature_table', type=str, required=True, help='Path to the full feature table.')
+
+    # Output arguments
+    output_group = parser.add_argument_group('Output arguments')
+    output_group.add_argument('-o', '--output_dir', type=str, required=True, help='Directory to save results.')
+
+    # Feature selection and modeling parameters
+    fs_modeling_group = parser.add_argument_group('Feature selection and modeling')
+    fs_modeling_group.add_argument('--num_features', type=int, default=100, help='Number of features to select (default: 100).')
+    fs_modeling_group.add_argument('--filter_type', type=str, default='none', help="Filter column for the input data.")
+    fs_modeling_group.add_argument('--method', type=str, default='rfe', choices=['rfe', 'shap_rfe', 'select_k_best', 'chi_squared', 'lasso', 'shap'],
+                                   help="Feature selection method ('rfe', 'shap_rfe', 'select_k_best', 'chi_squared', 'lasso', 'shap'; default: rfe).")
+    fs_modeling_group.add_argument('--num_runs_fs', type=int, default=10, help='Number of feature selection iterations to run (default: 10).')
+    fs_modeling_group.add_argument('--num_runs_modeling', type=int, default=10, help='Number of runs per feature table for modeling (default: 10).')
+    fs_modeling_group.add_argument('--task_type', type=str, default='classification', choices=['classification', 'regression'], help="Specify 'classification' or 'regression' task (default: classification).")
+    fs_modeling_group.add_argument('--binary_data', action='store_true', help='If set, converts feature values to binary (1/0); otherwise, continuous values are kept.')
+    fs_modeling_group.add_argument('--max_features', default='none', help='Maximum number of features to include in the feature tables.')
+    fs_modeling_group.add_argument('--use_shap', action='store_true', help='If set, calculate and save SHAP values.')
+    fs_modeling_group.add_argument('--use_dynamic_weights', action='store_true', help='If set, use dynamic weights for feature selection.')
+    fs_modeling_group.add_argument('--weights_method', default='log10', choices=['log10', 'inverse_frequency', 'balanced'], help='Method to calculate class weights (default: log10)')
+    fs_modeling_group.add_argument('--use_clustering', action='store_true', help='If set, use clustering for feature selection.')
+    fs_modeling_group.add_argument('--cluster_method', type=str, default='hdbscan', choices=['hdbscan', 'hierarchical'], help='Clustering method to use (default: hdbscan).')
+    fs_modeling_group.add_argument('--n_clusters', type=int, default=20, help='Number of clusters for hierarchical clustering (default: 20).')
+    fs_modeling_group.add_argument('--min_cluster_size', type=int, default=5, help='Minimum cluster size for clustering.')
+    fs_modeling_group.add_argument('--min_samples', type=int, help='Minimum number of samples for clustering feature selection.')
+    fs_modeling_group.add_argument('--cluster_selection_epsilon', type=float, default=0.0, help='Epsilon value for clustering feature selection.')
+    fs_modeling_group.add_argument('--check_feature_presence', action='store_true', help='If set, checks for presence of features during train-test split.')
+    fs_modeling_group.add_argument('--filter_by_cluster_presence', action='store_true', help='Filter features by cluster/group presence instead of train/test presence.')
+    fs_modeling_group.add_argument('--min_cluster_presence', type=int, default=2, help='Minimum number of clusters/groups a feature must be present in (default: 2).')
+
+    # Predictive proteins and annotations
+    predictive_proteins_group = parser.add_argument_group('Predictive Proteins and Annotations')
+    predictive_proteins_group.add_argument('--annotation_table_path', type=str, help="Path to an optional annotation table for merging predictive protein annotations (CSV/TSV).")
+    predictive_proteins_group.add_argument('--protein_id_col', type=str, default="protein_ID", help="Column name for protein IDs in the predictive_proteins DataFrame.")
+    predictive_proteins_group.add_argument('--feature2cluster_path', type=str, help="Path to the strain feature-to-cluster mapping file.")
+    predictive_proteins_group.add_argument('--cluster2protein_path', type=str, help="Path to the strain cluster-to-protein mapping file.")
+    predictive_proteins_group.add_argument('--fasta_dir_or_file', type=str, help="Path to the strain FASTA file or directory.")
+    predictive_proteins_group.add_argument('--phage_feature2cluster_path', type=str, help="Path to the phage feature-to-cluster mapping file.")
+    predictive_proteins_group.add_argument('--phage_cluster2protein_path', type=str, help="Path to the phage cluster-to-protein mapping file.")
+    predictive_proteins_group.add_argument('--phage_fasta_dir_or_file', type=str, help="Path to the phage FASTA file or directory.")
+    predictive_proteins_group.add_argument('--run_predictive_proteins', action='store_true', help="Include to run predictive proteins extraction workflow.")
+
+    # Optional column parameters
+    optional_columns_group = parser.add_argument_group('Optional columns')
+    optional_columns_group.add_argument('--sample_column', type=str, default='strain', help='Column name for the sample identifier (default: strain).')
+    optional_columns_group.add_argument('--phenotype_column', type=str, default='interaction', help='Column name for the phenotype (optional).')
+    optional_columns_group.add_argument('--phage_column', type=str, default='phage', help='Column name for the phage identifier (optional).')
+
+    # General parameters
+    general_group = parser.add_argument_group('General')
+    general_group.add_argument('--threads', type=int, default=4, help='Number of threads to use (default: 4).')
+    general_group.add_argument('--max_ram', type=float, default=8, help='Maximum RAM usage in GB for feature selection (default: 8).')
+
+    args = parser.parse_args()
+
+    # Run the feature selection, modeling, and optional predictive proteins extraction workflow
+    run_modeling_workflow_from_feature_table(
+        full_feature_table=args.full_feature_table,
+        output_dir=args.output_dir,
+        threads=args.threads,
+        num_features=args.num_features,
+        filter_type=args.filter_type,
+        num_runs_fs=args.num_runs_fs,
+        num_runs_modeling=args.num_runs_modeling,
+        sample_column=args.sample_column,
+        phage_column=args.phage_column,
+        phenotype_column=args.phenotype_column,
+        method=args.method,
+        annotation_table_path=args.annotation_table_path,
+        protein_id_col=args.protein_id_col,
+        feature2cluster_path=args.feature2cluster_path,
+        cluster2protein_path=args.cluster2protein_path,
+        fasta_dir_or_file=args.fasta_dir_or_file,
+        run_predictive_proteins=args.run_predictive_proteins,
+        phage_feature2cluster_path=args.phage_feature2cluster_path,
+        phage_cluster2protein_path=args.phage_cluster2protein_path,
+        phage_fasta_dir_or_file=args.phage_fasta_dir_or_file,
+        task_type=args.task_type,
+        binary_data=args.binary_data,
+        max_features=args.max_features,
+        use_dynamic_weights=args.use_dynamic_weights,
+        weights_method=args.weights_method,
+        use_clustering=args.use_clustering,
+        cluster_method=args.cluster_method,
+        n_clusters=args.n_clusters,
+        min_cluster_size=args.min_cluster_size,
+        min_samples=args.min_samples,
+        cluster_selection_epsilon=args.cluster_selection_epsilon,
+        check_feature_presence=args.check_feature_presence,
+        filter_by_cluster_presence=args.filter_by_cluster_presence,
+        min_cluster_presence=args.min_cluster_presence,
+        max_ram=args.max_ram,
+        use_shap=args.use_shap
+    )
+
+if __name__ == "__main__":
+    main()
