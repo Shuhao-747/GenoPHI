@@ -196,6 +196,9 @@ def run_protein_family_workflow(
 
     # Initialize counters for report
     input_genomes = protein_families = 0
+    # 以下两行是新加上去的
+    features = 0
+    strain_feature_count = 0
     phage_feature_count = None
 
     try:

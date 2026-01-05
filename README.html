@@ -1,0 +1,1024 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 2cm;
+        line-height: 1.6;
+    }
+    h1, h2, h3, h4, h5, h6 {
+        color: #333;
+        margin-top: 1.5em;
+        margin-bottom: 0.5em;
+    }
+    h1 {
+        font-size: 2.5em;
+        border-bottom: 2px solid #ccc;
+        padding-bottom: 0.3em;
+    }
+    h2 {
+        font-size: 2em;
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 0.3em;
+    }
+    pre {
+        background-color: #f5f5f5;
+        padding: 1em;
+        border-radius: 4px;
+        overflow-x: auto;
+    }
+    code {
+        font-family: Consolas, Monaco, 'Andale Mono', monospace;
+        background-color: #f5f5f5;
+        padding: 0.2em 0.4em;
+        border-radius: 3px;
+    }
+    pre code {
+        padding: 0;
+        background-color: transparent;
+    }
+    table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 1em 0;
+    }
+    th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+    }
+    th {
+        background-color: #f2f2f2;
+    }
+    img {
+        max-width: 100%;
+        height: auto;
+    }
+    blockquote {
+        border-left: 4px solid #ddd;
+        padding-left: 1em;
+        margin-left: 0;
+        color: #666;
+    }
+    ul, ol {
+        padding-left: 2em;
+    }
+    hr {
+        border: 0;
+        border-top: 1px solid #ddd;
+        margin: 2em 0;
+    }
+</style>
+
+</head>
+<body>
+    <h1 id="genophi">GenoPHI</h1>
+<p><strong>Genotype-to-Phenotype Phage-Host Interaction Prediction</strong></p>
+<p>GenoPHI is a Python package for machine learning-based prediction of genotype-phenotype relationships using whole-genome sequence data. Originally designed for phage-host interaction prediction, GenoPHI supports both binary interaction prediction and regression tasks for any microbial phenotype. The package implements protein family-based and <em>k</em>-mer-based approaches to extract genomic features from amino acid sequences and predict phenotypes using CatBoost gradient boosting models.</p>
+<p><a href="https://opensource.org/licenses/MIT"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg" /></a>
+<a href="https://www.python.org/downloads/"><img alt="Python 3.8+" src="https://img.shields.io/badge/python-3.8+-blue.svg" /></a></p>
+<h2 id="workflow-overview">Workflow Overview</h2>
+<p><img alt="GenoPHI Workflow" src="images/workflow_diagram.png" />
+<em>Figure 1: GenoPHI workflow schematic showing the main analysis pipelines: Protein family-based workflow, <em>K</em>-mer-based workflow, and Predictive protein k-mer workflow. Each pathway includes feature extraction, selection, model training, and prediction steps.</em></p>
+<h2 id="table-of-contents">Table of Contents</h2>
+<ul>
+<li><a href="#features">Features</a></li>
+<li><a href="#installation">Installation</a></li>
+<li><a href="#quick-start">Quick Start</a></li>
+<li><a href="#usage">Usage</a></li>
+<li><a href="#cli-commands-overview">CLI Commands Overview</a></li>
+<li><a href="#workflows">Workflows</a></li>
+<li><a href="#input-data-formats">Input Data Formats</a></li>
+<li><a href="#feature-selection-methods">Feature Selection Methods</a></li>
+<li><a href="#performance-metrics">Performance Metrics</a></li>
+<li><a href="#output-directory-structure">Output Directory Structure</a></li>
+<li><a href="#python-api">Python API</a></li>
+<li><a href="#advanced-usage">Advanced Usage</a></li>
+<li><a href="#troubleshooting">Troubleshooting</a></li>
+<li><a href="#best-practices">Best Practices</a></li>
+<li><a href="#citation">Citation</a></li>
+<li><a href="#contributing">Contributing</a></li>
+<li><a href="#license">License</a></li>
+<li><a href="#support">Support</a></li>
+<li><a href="#acknowledgments">Acknowledgments</a></li>
+</ul>
+<h2 id="features">Features</h2>
+<h3 id="protein-family-based-analysis">Protein Family-Based Analysis</h3>
+<ol>
+<li><strong>MMSeqs2 Clustering</strong>: Cluster protein sequences into protein families based on sequence similarity</li>
+<li><strong>Feature Table Generation</strong>: Create presence-absence matrices of protein families across genomes and consolidate into predictive features based on co-occurence across genomes</li>
+<li><strong>Feature Selection</strong>: Identify predictive protein families (multiple available methods: RFE, SHAP, SHAP-RFE, ANOVA, Chi-squared, Lasso)</li>
+<li><strong>Model Training</strong>: Train CatBoost models with hyperparameter optimization</li>
+<li><strong>Phenotype Prediction</strong>: Predict interactions, resistance, or other phenotypes for new genomes</li>
+<li><strong>Feature Annotation</strong>: Identify predictive protein sequences from predictive features</li>
+</ol>
+<h3 id="k-mer-based-analysis"><em>K</em>-mer-Based Analysis</h3>
+<ol>
+<li><strong><em>K</em>-mer Feature Extraction</strong>: Generate <em>k</em>-mer features from protein sequences with or without gene family context</li>
+<li><strong>Predictive <em>K</em>-mer Workflow</strong>: Extract <em>k</em>-mers specifically from predictive protein families identified in protein family analysis</li>
+<li><strong>Feature Selection &amp; Modeling</strong>: Apply same robust feature selection and modeling pipelines</li>
+<li><strong>Flexible <em>K</em>-mer Lengths</strong>: Support for single <em>k</em>-mer length or ranges (e.g., 3-6)</li>
+</ol>
+<h3 id="application-modes">Application Modes</h3>
+<ul>
+<li><strong>Phage-Host Interaction Prediction</strong>: Binary prediction of infection outcomes between phages and bacterial strains</li>
+<li><strong>Single-Strain Phenotype Prediction</strong>: Predict strain-level phenotypes (e.g., antibiotic resistance, growth rate) without requiring phage data</li>
+<li><strong>Regression Tasks</strong>: Predict continuous phenotypes (e.g., infection efficiency, metabolic rates)</li>
+<li><strong>General Feature-Based Modeling</strong>: Use any feature table with a phenotype column for custom applications</li>
+</ul>
+<h3 id="advanced-capabilities">Advanced Capabilities</h3>
+<ul>
+<li><strong>Dynamic Feature Weighting</strong>: Account for feature frequency distributions to handle imbalanced features</li>
+<li><strong>Clustering-Based Selection</strong>: Use HDBSCAN or hierarchical clustering for intelligent feature grouping</li>
+<li><strong>Multiple Feature Selection Methods</strong>: RFE, SHAP-RFE, SelectKBest, Chi-squared, Lasso, SHAP</li>
+<li><strong>Comprehensive Performance Metrics</strong>: AUC-ROC, Precision-Recall, MCC, F1-score, Accuracy</li>
+<li><strong>SHAP Interpretability</strong>: Feature importance analysis and visualization for model explainability</li>
+<li><strong>Bootstrapping Support</strong>: Robust model evaluation with multiple train-test splits</li>
+</ul>
+<h2 id="installation">Installation</h2>
+<h3 id="prerequisites">Prerequisites</h3>
+<p><strong>External Dependency</strong>: GenoPHI requires MMseqs2 for protein sequence clustering and assignment.</p>
+<p>Install via conda/mamba:</p>
+<div class="codehilite"><pre><span></span><code>conda<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>mmseqs2
+<span class="c1"># or</span>
+mamba<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>mmseqs2
+</code></pre></div>
+
+<p>For other installation methods, see the <a href="https://github.com/soedinglab/MMseqs2/wiki#installation">MMSeqs2 Wiki</a>.</p>
+<h3 id="system-requirements">System Requirements</h3>
+<p><strong>Minimum Requirements:</strong>
+- Python 3.8 or higher
+- 8 GB RAM
+- 4 CPU cores
+- 10 GB free disk space</p>
+<p><strong>Recommended for Large Datasets:</strong>
+- Python 3.10+
+- 32+ GB RAM
+- 8+ CPU cores
+- 50+ GB free disk space (depending on dataset size)</p>
+<p><strong>Tested Operating Systems:</strong>
+- Linux (Ubuntu 20.04+, CentOS 7+)</p>
+<h3 id="virtual-environment-recommended">Virtual Environment (Recommended)</h3>
+<p>Create and activate a conda environment:</p>
+<div class="codehilite"><pre><span></span><code>conda<span class="w"> </span>create<span class="w"> </span>-n<span class="w"> </span>genophi<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.10
+conda<span class="w"> </span>activate<span class="w"> </span>genophi
+</code></pre></div>
+
+<h3 id="install-genophi">Install GenoPHI</h3>
+<p>Clone and install from GitHub:</p>
+<div class="codehilite"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/Noonanav/GenoPHI.git
+<span class="nb">cd</span><span class="w"> </span>GenoPHI
+pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+</code></pre></div>
+
+<p>For development with optional dependencies:</p>
+<div class="codehilite"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[dev]&quot;</span>
+</code></pre></div>
+
+<h3 id="verify-installation">Verify Installation</h3>
+<p>Test that GenoPHI is properly installed:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Check GenoPHI version</span>
+genophi<span class="w"> </span>--version
+
+<span class="c1"># Verify MMseqs2 is accessible</span>
+mmseqs<span class="w"> </span>version
+
+<span class="c1"># Run basic help command</span>
+genophi<span class="w"> </span>--help
+</code></pre></div>
+
+<h2 id="quick-start">Quick Start</h2>
+<p>GenoPHI provides a unified command-line interface accessible through the <code>genophi</code> command:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># View available commands</span>
+genophi<span class="w"> </span>--help
+
+<span class="c1"># Get help for a specific command</span>
+genophi<span class="w"> </span>protein-family-workflow<span class="w"> </span>--help
+</code></pre></div>
+
+<h3 id="recommended-default-run">Recommended Default Run</h3>
+<p>For most phage-host interaction prediction tasks, use these recommended settings:</p>
+<div class="codehilite"><pre><span></span><code>genophi<span class="w"> </span>protein-family-workflow<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input_strain<span class="w"> </span>strain_fastas/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input_phage<span class="w"> </span>phage_fastas/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--phenotype_matrix<span class="w"> </span>interactions.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output<span class="w"> </span>results/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--threads<span class="w"> </span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num_features<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num_runs_fs<span class="w"> </span><span class="m">25</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num_runs_modeling<span class="w"> </span><span class="m">50</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--method<span class="w"> </span>rfe<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--use_clustering<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--cluster_method<span class="w"> </span>hierarchical<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--n_clusters<span class="w"> </span><span class="m">20</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--filter_type<span class="w"> </span>strain
+</code></pre></div>
+
+<p><strong>Key Parameters Explained:</strong>
+- <code>--num_features 100</code>: Select top 100 features (adjust based on dataset size)
+- <code>--num_runs_fs 25</code>: 25 iterations for robust feature selection
+- <code>--num_runs_modeling 50</code>: 50 modeling runs for reliable performance estimates
+- <code>--method rfe</code>: Recursive Feature Elimination (balanced performance)
+- <code>--use_clustering</code>: Enable hierarchical clustering of features
+- <code>--filter_type strain</code>: Split data by strain to test generalization</p>
+<p>For single-strain phenotypes (no phage data):</p>
+<div class="codehilite"><pre><span></span><code>genophi<span class="w"> </span>protein-family-workflow<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input_strain<span class="w"> </span>strain_fastas/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--phenotype_matrix<span class="w"> </span>phenotypes.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output<span class="w"> </span>results/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--threads<span class="w"> </span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--sample_column<span class="w"> </span>strain<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--phenotype_column<span class="w"> </span>resistance<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--filter_type<span class="w"> </span>none
+</code></pre></div>
+
+<h2 id="usage">Usage</h2>
+<h3 id="cli-commands-overview">CLI Commands Overview</h3>
+<p>GenoPHI provides the following main commands:</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>protein-family-workflow</code></td>
+<td><strong>Recommended basic workflow</strong>: Complete protein family-based workflow</td>
+</tr>
+<tr>
+<td><code>full-workflow</code></td>
+<td>Protein families → <em>k</em>-mers from predictive proteins</td>
+</tr>
+<tr>
+<td><code>kmer-workflow</code></td>
+<td>Complete <em>k</em>-mer-based workflow from all proteins</td>
+</tr>
+<tr>
+<td><code>cluster</code></td>
+<td>Generate protein family clusters and feature tables</td>
+</tr>
+<tr>
+<td><code>select-features</code></td>
+<td>Perform feature selection on any feature table</td>
+</tr>
+<tr>
+<td><code>train</code></td>
+<td>Train predictive models on selected features</td>
+</tr>
+<tr>
+<td><code>predict</code></td>
+<td>Predict phenotypes using trained models</td>
+</tr>
+<tr>
+<td><code>select-and-train</code></td>
+<td>Feature selection + modeling from any feature table</td>
+</tr>
+<tr>
+<td><code>assign-features</code></td>
+<td>Assign features to new genomes</td>
+</tr>
+<tr>
+<td><code>assign-predict</code></td>
+<td>Assign features and predict (protein families)</td>
+</tr>
+<tr>
+<td><code>annotate</code></td>
+<td>Annotate predictive features with functional info</td>
+</tr>
+<tr>
+<td><code>kmer-assign-features</code></td>
+<td>Assign <em>k</em>-mer features to new genomes</td>
+</tr>
+<tr>
+<td><code>kmer-assign-predict</code></td>
+<td>Assign <em>k</em>-mer features and predict</td>
+</tr>
+</tbody>
+</table>
+<h2 id="workflows">Workflows</h2>
+<h3 id="1-protein-family-workflow-recommended">1. Protein Family Workflow (Recommended)</h3>
+<p>The primary workflow for most applications. Performs complete protein family clustering, feature selection, and modeling.</p>
+<h4 id="complete-workflow">Complete Workflow</h4>
+<div class="codehilite"><pre><span></span><code>genophi<span class="w"> </span>protein-family-workflow<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input_strain<span class="w"> </span>strain_fastas/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input_phage<span class="w"> </span>phage_fastas/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--phenotype_matrix<span class="w"> </span>interactions.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output<span class="w"> </span>results/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--threads<span class="w"> </span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num_features<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num_runs_fs<span class="w"> </span><span class="m">25</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num_runs_modeling<span class="w"> </span><span class="m">50</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--method<span class="w"> </span>rfe<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--filter_type<span class="w"> </span>strain
+</code></pre></div>
+
+<p><strong>Output Structure:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="nv">results</span><span class="o">/</span>
+├──<span class="w"> </span><span class="nv">clustering</span><span class="o">/</span><span class="w">              </span>#<span class="w"> </span><span class="nv">MMseqs2</span><span class="w"> </span><span class="nv">databases</span><span class="w"> </span><span class="nv">and</span><span class="w"> </span><span class="nv">clusters</span>
+├──<span class="w"> </span><span class="nv">feature_tables</span><span class="o">/</span><span class="w">          </span>#<span class="w"> </span><span class="nv">Generated</span><span class="w"> </span><span class="nv">feature</span><span class="w"> </span><span class="nv">tables</span>
+├──<span class="w"> </span><span class="nv">feature_selection</span><span class="o">/</span><span class="w">       </span>#<span class="w"> </span><span class="nv">Selected</span><span class="w"> </span><span class="nv">features</span><span class="w"> </span><span class="nv">and</span><span class="w"> </span><span class="nv">occurrence</span><span class="w"> </span><span class="nv">counts</span>
+├──<span class="w"> </span><span class="nv">modeling_results</span><span class="o">/</span><span class="w">        </span>#<span class="w"> </span><span class="nv">Models</span><span class="w"> </span><span class="nv">and</span><span class="w"> </span><span class="nv">performance</span><span class="w"> </span><span class="nv">metrics</span>
+│<span class="w">   </span>├──<span class="w"> </span><span class="nv">cutoff_5</span><span class="o">/</span>,<span class="w"> </span><span class="nv">cutoff_10</span><span class="o">/</span>,<span class="w"> </span>...
+│<span class="w">   </span>├──<span class="w"> </span><span class="nv">model_performance</span><span class="o">/</span><span class="w">   </span>#<span class="w"> </span><span class="nv">Summary</span><span class="w"> </span><span class="nv">plots</span>
+│<span class="w">   </span>└──<span class="w"> </span><span class="nv">models</span><span class="o">/</span><span class="w">             </span>#<span class="w"> </span><span class="nv">Trained</span><span class="w"> </span><span class="nv">models</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nv">prediction</span>
+└──<span class="w"> </span><span class="nv">workflow_report</span>.<span class="nv">txt</span><span class="w">     </span>#<span class="w"> </span><span class="nv">Performance</span><span class="w"> </span><span class="nv">and</span><span class="w"> </span><span class="nv">timing</span><span class="w"> </span><span class="nv">summary</span>
+</code></pre></div>
+
+<h4 id="single-strain-phenotype-prediction">Single-Strain Phenotype Prediction</h4>
+<p>For strain-level phenotypes (no phage data required):</p>
+<div class="codehilite"><pre><span></span><code>genophi<span class="w"> </span>protein-family-workflow<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input_strain<span class="w"> </span>strain_fastas/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--phenotype_matrix<span class="w"> </span>strain_phenotypes.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output<span class="w"> </span>results/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--threads<span class="w"> </span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--sample_column<span class="w"> </span>strain<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--phenotype_column<span class="w"> </span>antibiotic_resistance<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--task_type<span class="w"> </span>classification<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--filter_type<span class="w"> </span>none
+</code></pre></div>
+
+<p><strong>Phenotype Matrix Format:</strong></p>
+<div class="codehilite"><pre><span></span><code>strain,antibiotic_resistance
+Strain_001,1
+Strain_002,0
+Strain_003,1
+</code></pre></div>
+
+<p>For regression:</p>
+<div class="codehilite"><pre><span></span><code>--task_type<span class="w"> </span>regression<span class="w"> </span><span class="se">\</span>
+--phenotype_column<span class="w"> </span>growth_rate
+</code></pre></div>
+
+<h3 id="2-full-workflow-protein-families-predictive-k-mers">2. Full Workflow: Protein Families → Predictive <em>K</em>-mers</h3>
+<p>This workflow first identifies predictive protein families, then extracts <em>k</em>-mers specifically from those families for refined modeling. This combines the interpretability of protein families with the resolution of <em>k</em>-mer analysis.</p>
+<div class="codehilite"><pre><span></span><code>genophi<span class="w"> </span>full-workflow<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input_strain<span class="w"> </span>strain_fastas/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input_phage<span class="w"> </span>phage_fastas/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--phenotype_matrix<span class="w"> </span>interactions.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output<span class="w"> </span>results/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--k<span class="w"> </span><span class="m">5</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--threads<span class="w"> </span><span class="m">8</span>
+</code></pre></div>
+
+<p><strong>Workflow Steps:</strong>
+1. Cluster proteins into families
+2. Perform feature selection on protein families
+3. Extract <em>k</em>-mers from predictive protein families only
+4. Train models on <em>k</em>-mer features
+5. Generate annotations for predictive <em>k</em>-mers</p>
+<h3 id="3-k-mer-workflow-de-novo">3. <em>K</em>-mer Workflow (<em>De Novo</em>)</h3>
+<p>Generate <em>k</em>-mer features from all proteins without prior protein family analysis:</p>
+<div class="codehilite"><pre><span></span><code>genophi<span class="w"> </span>kmer-workflow<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input_strain<span class="w"> </span>strain_fastas/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input_phage<span class="w"> </span>phage_fastas/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--phenotype_matrix<span class="w"> </span>interactions.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output<span class="w"> </span>kmer_results/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--k<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--threads<span class="w"> </span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num_features<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num_runs_fs<span class="w"> </span><span class="m">25</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num_runs_modeling<span class="w"> </span><span class="m">50</span>
+</code></pre></div>
+
+<p><strong><em>K</em>-mer Specific Parameters:</strong>
+- <code>--k 4</code>: <em>K</em>-mer length (default: 4)
+- <code>--k_range</code>: Generate <em>k</em>-mers from length 3 to k
+- <code>--one_gene</code>: Include features with only one gene (default: False)</p>
+<p><strong>Advanced Options:</strong></p>
+<div class="codehilite"><pre><span></span><code>--use_dynamic_weights<span class="w"> </span><span class="se">\ </span><span class="w">       </span><span class="c1"># Apply dynamic weighting</span>
+--weights_method<span class="w"> </span>inverse_frequency<span class="w"> </span><span class="se">\ </span><span class="w">      </span><span class="c1"># Weighting method</span>
+--use_feature_clustering<span class="w"> </span><span class="se">\ </span><span class="w">    </span><span class="c1"># Pre-filter by cluster presence</span>
+--feature_n_clusters<span class="w"> </span><span class="m">20</span><span class="w">        </span><span class="c1"># Number of feature clusters</span>
+</code></pre></div>
+
+<h3 id="4-modular-step-by-step-workflows">4. Modular Step-by-Step Workflows</h3>
+<h4 id="step-1-clustering-and-feature-generation">Step 1: Clustering and Feature Generation</h4>
+<div class="codehilite"><pre><span></span><code>genophi<span class="w"> </span>cluster<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input_strain<span class="w"> </span>strain_fastas/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input_phage<span class="w"> </span>phage_fastas/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--phenotype_matrix<span class="w"> </span>interactions.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output<span class="w"> </span>clustering_results/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--min_seq_id<span class="w"> </span><span class="m">0</span>.4<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--coverage<span class="w"> </span><span class="m">0</span>.8<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--sensitivity<span class="w"> </span><span class="m">7</span>.5<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--threads<span class="w"> </span><span class="m">8</span>
+</code></pre></div>
+
+<p><strong>Clustering Parameters:</strong>
+- <code>--min_seq_id 0.4</code>: Minimum sequence identity (range: 0-1)
+- <code>--coverage 0.8</code>: Minimum coverage (range: 0-1)<br />
+- <code>--sensitivity 7.5</code>: MMseqs2 sensitivity (higher = more sensitive, slower)</p>
+<h4 id="step-2-feature-selection">Step 2: Feature Selection</h4>
+<p>Feature selection works on <strong>any</strong> feature table with a phenotype column:</p>
+<div class="codehilite"><pre><span></span><code>genophi<span class="w"> </span><span class="k">select</span>-features<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input<span class="w"> </span>feature_table.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output<span class="w"> </span>feature_selection/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--method<span class="w"> </span>rfe<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num_features<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num_runs<span class="w"> </span><span class="m">25</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--filter_type<span class="w"> </span>strain<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--phenotype_column<span class="w"> </span>interaction<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--threads<span class="w"> </span><span class="m">8</span>
+</code></pre></div>
+
+<p><strong>Feature Selection Methods:</strong>
+- <code>rfe</code>: Recursive Feature Elimination (recommended)
+- <code>shap_rfe</code>: RFE using SHAP values
+- <code>select_k_best</code>: ANOVA F-test (fast)
+- <code>chi_squared</code>: Chi-squared test
+- <code>lasso</code>: L1 regularization
+- <code>shap</code>: Direct SHAP importance</p>
+<p><strong>Advanced Selection Options:</strong></p>
+<div class="codehilite"><pre><span></span><code>--use_dynamic_weights<span class="w"> </span><span class="se">\ </span><span class="w">              </span><span class="c1"># Handle imbalanced features</span>
+--weights_method<span class="w"> </span>inverse_frequency<span class="w"> </span><span class="se">\ </span><span class="w"> </span><span class="c1"># Weighting strategy</span>
+--use_clustering<span class="w"> </span><span class="se">\ </span><span class="w">                   </span><span class="c1"># Group correlated features</span>
+--cluster_method<span class="w"> </span>hierarchical<span class="w"> </span><span class="se">\ </span><span class="w">      </span><span class="c1"># Clustering algorithm</span>
+--n_clusters<span class="w"> </span><span class="m">20</span><span class="w">                       </span><span class="c1"># Number of clusters</span>
+</code></pre></div>
+
+<h4 id="step-3-model-training">Step 3: Model Training</h4>
+<p>Train models from selected features or any feature table:</p>
+<div class="codehilite"><pre><span></span><code>genophi<span class="w"> </span>train<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input_dir<span class="w"> </span>feature_selection/filtered_feature_tables<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output<span class="w"> </span>models/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num_runs<span class="w"> </span><span class="m">50</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--phenotype_column<span class="w"> </span>interaction<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--threads<span class="w"> </span><span class="m">8</span>
+</code></pre></div>
+
+<p>For regression tasks:</p>
+<div class="codehilite"><pre><span></span><code>--task_type<span class="w"> </span>regression<span class="w"> </span><span class="se">\</span>
+--phenotype_column<span class="w"> </span>efficiency
+</code></pre></div>
+
+<h4 id="step-4-select-and-train-combined">Step 4: Select-and-Train (Combined)</h4>
+<p>Run feature selection and modeling together from <strong>any feature table</strong>:</p>
+<div class="codehilite"><pre><span></span><code>genophi<span class="w"> </span><span class="k">select</span>-and-train<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input<span class="w"> </span>custom_feature_table.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output<span class="w"> </span>results/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--method<span class="w"> </span>rfe<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num_features<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num_runs_fs<span class="w"> </span><span class="m">25</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--num_runs_modeling<span class="w"> </span><span class="m">50</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--phenotype_column<span class="w"> </span>your_phenotype<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--sample_column<span class="w"> </span>your_sample_id<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--threads<span class="w"> </span><span class="m">8</span>
+</code></pre></div>
+
+<p>This command is flexible and works with:
+- Protein family features
+- <em>K</em>-mer features<br />
+- Custom features
+- Any feature table with any phenotype / output column</p>
+<h3 id="5-prediction-workflows">5. Prediction Workflows</h3>
+<h4 id="assign-features-and-predict-protein-families">Assign Features and Predict (Protein Families)</h4>
+<div class="codehilite"><pre><span></span><code>genophi<span class="w"> </span>assign-predict<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input_dir<span class="w"> </span>new_strains/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--mmseqs_db<span class="w"> </span>results/tmp/strain/mmseqs_db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--clusters_tsv<span class="w"> </span>results/strain/clusters.tsv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--feature_map<span class="w"> </span>results/strain/features/selected_features.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model_dir<span class="w"> </span>results/modeling_results/cutoff_*<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--phage_feature_table<span class="w"> </span>results/phage/features/feature_table.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output<span class="w"> </span>predictions/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--genome_type<span class="w"> </span>strain
+</code></pre></div>
+
+<p>For new phages:</p>
+<div class="codehilite"><pre><span></span><code>--input_dir<span class="w"> </span>new_phages/<span class="w"> </span><span class="se">\</span>
+--mmseqs_db<span class="w"> </span>results/tmp/phage/mmseqs_db<span class="w"> </span><span class="se">\</span>
+--clusters_tsv<span class="w"> </span>results/phage/features/selected_features.csv<span class="w"> </span><span class="se">\</span>
+--strain_feature_table<span class="w"> </span>results/strain/features/feature_table.csv<span class="w"> </span><span class="se">\</span>
+--genome_type<span class="w"> </span>phage
+</code></pre></div>
+
+<h4 id="k-mer-assignment-and-prediction"><em>K</em>-mer Assignment and Prediction</h4>
+<div class="codehilite"><pre><span></span><code>genophi<span class="w"> </span>kmer-assign-predict<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--input_dir<span class="w"> </span>new_strains/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--mmseqs_db<span class="w"> </span>results/tmp/strain/mmseqs_db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--clusters_tsv<span class="w"> </span>results/strain/clusters.tsv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--feature_map<span class="w"> </span>results/strain/features/selected_features.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--filtered_kmers<span class="w"> </span>kmer_results/kmer_tables/filtered_kmers.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--aa_sequence_file<span class="w"> </span>kmer_results/kmer_tables/aa_sequences.faa<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--model_dir<span class="w"> </span>kmer_results/modeling/modeling_results/cutoff_*<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output<span class="w"> </span>predictions/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--genome_type<span class="w"> </span>strain
+</code></pre></div>
+
+<h3 id="6-feature-annotation">6. Feature Annotation</h3>
+<p>Identifies proteins associated predictive protein families or <em>k</em>-mers and merges with functional information:</p>
+<div class="codehilite"><pre><span></span><code>genophi<span class="w"> </span>annotate<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--selected_features<span class="w"> </span>feature_selection/filtered_feature_tables/select_feature_table_cutoff_3.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--feature_map<span class="w"> </span>strain/features/feature_map.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--clusters_tsv<span class="w"> </span>clustering_results/clustering/selected_features.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--annotation_table<span class="w"> </span>annotations.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--aa_sequence_file<span class="w"> </span>all_sequences.faa<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output<span class="w"> </span>annotations/<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--feature_type<span class="w"> </span>strain
+</code></pre></div>
+
+<h2 id="input-data-formats">Input Data Formats</h2>
+<h3 id="fasta-files">FASTA Files</h3>
+<p>Protein sequences in FASTA format (.faa files):</p>
+<div class="codehilite"><pre><span></span><code>&gt;protein_id_1
+MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQAPILSRVGDGTQDNLSGAEKAVQVKVKALPDAQFEVVHSLAKWKRQ...
+&gt;protein_id_2
+MRISTTITTTITITTGNGAG...
+</code></pre></div>
+
+<p><strong>Important</strong>: Protein IDs must be unique across all genomes. If duplicates exist, GenoPHI will automatically prefix them with genome names.</p>
+<h3 id="phenotype-matrix">Phenotype Matrix</h3>
+<h4 id="phage-host-interactions">Phage-Host Interactions</h4>
+<p>Binary classification (infection/no infection):</p>
+<div class="codehilite"><pre><span></span><code>strain,phage,interaction
+Strain_001,Phage_A,1
+Strain_001,Phage_B,0
+Strain_002,Phage_A,1
+</code></pre></div>
+
+<p>Regression (infection efficiency):</p>
+<div class="codehilite"><pre><span></span><code>strain,phage,efficiency
+Strain_001,Phage_A,0.85
+Strain_001,Phage_B,0.12
+Strain_002,Phage_A,0.93
+</code></pre></div>
+
+<h4 id="single-strain-phenotypes">Single-Strain Phenotypes</h4>
+<p>Classification:</p>
+<div class="codehilite"><pre><span></span><code>strain,antibiotic_resistance
+Strain_001,1
+Strain_002,0
+Strain_003,1
+</code></pre></div>
+
+<p>Regression:</p>
+<div class="codehilite"><pre><span></span><code>strain,growth_rate
+Strain_001,0.42
+Strain_002,0.38
+Strain_003,0.51
+</code></pre></div>
+
+<p><strong>Column Names</strong>: Use <code>--strain_column</code>, <code>--phage_column</code>, <code>--sample_column</code>, and <code>--phenotype_column</code> to specify your column names.</p>
+<h2 id="feature-selection-methods">Feature Selection Methods</h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Description</th>
+<th>Best For</th>
+<th>Speed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>RFE (recommended)</strong></td>
+<td>Recursive Feature Elimination</td>
+<td>General use, balanced performance</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td><strong>SHAP-RFE</strong></td>
+<td>RFE using SHAP values</td>
+<td>Model-agnostic importance</td>
+<td>Slow (High RAM)</td>
+</tr>
+<tr>
+<td><strong>SelectKBest</strong></td>
+<td>ANOVA F-test</td>
+<td>Fast screening, linear relationships</td>
+<td>Fast</td>
+</tr>
+<tr>
+<td><strong>Chi-squared</strong></td>
+<td>χ² test for independence</td>
+<td>Categorical features</td>
+<td>Fast</td>
+</tr>
+<tr>
+<td><strong>Lasso</strong></td>
+<td>L1 regularized regression</td>
+<td>Sparse models, multicollinearity</td>
+<td>Fast</td>
+</tr>
+<tr>
+<td><strong>SHAP</strong></td>
+<td>Shapley Additive Explanations</td>
+<td>Direct feature importance</td>
+<td>Slow (High RAM)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="dynamic-weighting">Dynamic Weighting</h3>
+<p>Handle imbalanced feature distributions:</p>
+<div class="codehilite"><pre><span></span><code>--use_dynamic_weights<span class="w"> </span><span class="se">\</span>
+--weights_method<span class="w"> </span>inverse_frequency<span class="w">  </span><span class="c1"># or log10, balanced</span>
+</code></pre></div>
+
+<p><strong>When to use:</strong>
+- Features with highly variable occurrence frequencies
+- Some features present in most genomes, others very rare
+- Imbalanced positive/negative examples</p>
+<h3 id="clustering-based-selection">Clustering-Based Selection</h3>
+<p>Group correlated features for more robust selection:</p>
+<div class="codehilite"><pre><span></span><code>--use_clustering<span class="w"> </span><span class="se">\</span>
+--cluster_method<span class="w"> </span>hierarchical<span class="w"> </span><span class="se">\ </span><span class="w"> </span><span class="c1"># or hdbscan</span>
+--n_clusters<span class="w"> </span><span class="m">20</span>
+</code></pre></div>
+
+<p><strong>HDBSCAN Options:</strong></p>
+<div class="codehilite"><pre><span></span><code>--cluster_method<span class="w"> </span>hdbscan<span class="w"> </span><span class="se">\</span>
+--min_cluster_size<span class="w"> </span><span class="m">5</span><span class="w"> </span><span class="se">\</span>
+--min_samples<span class="w"> </span><span class="m">5</span><span class="w"> </span><span class="se">\</span>
+--cluster_selection_epsilon<span class="w"> </span><span class="m">0</span>.0
+</code></pre></div>
+
+<h2 id="performance-metrics">Performance Metrics</h2>
+<h3 id="classification-metrics">Classification Metrics</h3>
+<ul>
+<li>
+<p><strong>AUC-ROC (Area Under ROC Curve)</strong>: Overall discriminative ability
+  $$\text{AUC} = \int_{0}^{1} \text{TPR}(\text{FPR}) \, d\text{FPR}$$</p>
+</li>
+<li>
+<p><strong>MCC (Matthews Correlation Coefficient)</strong>: Balanced metric for all confusion matrix elements
+  $$\text{MCC} = \frac{TP \times TN - FP \times FN}{\sqrt{(TP + FP)(TP + FN)(TN + FP)(TN + FN)}}$$</p>
+</li>
+<li>
+<p><strong>Precision</strong>: Proportion of true positives among predicted positives
+  $$\text{Precision} = \frac{TP}{TP + FP}$$</p>
+</li>
+<li>
+<p><strong>Recall (Sensitivity)</strong>: Proportion of true positives among actual positives<br />
+  $$\text{Recall} = \frac{TP}{TP + FN}$$</p>
+</li>
+<li>
+<p><strong>F1 Score</strong>: Harmonic mean of precision and recall
+  $$F1 = 2 \times \frac{\text{Precision} \times \text{Recall}}{\text{Precision} + \text{Recall}}$$</p>
+</li>
+<li>
+<p><strong>Accuracy</strong>: Overall correct predictions
+  $$\text{Accuracy} = \frac{TP + TN}{TP + TN + FP + FN}$$</p>
+</li>
+</ul>
+<h3 id="regression-metrics">Regression Metrics</h3>
+<ul>
+<li><strong>RMSE</strong>: Root Mean Squared Error</li>
+<li><strong>MAE</strong>: Mean Absolute Error</li>
+<li><strong>R²</strong>: Coefficient of determination</li>
+</ul>
+<h3 id="visualization-outputs">Visualization Outputs</h3>
+<p>GenoPHI generates comprehensive visualizations:</p>
+<p><strong>Per-Run Plots</strong> (<code>modeling_results/cutoff_*/run_*/</code>):
+- Confusion matrices (classification)
+- ROC curves with AUC scores
+- Precision-Recall curves
+- SHAP feature importance bar plots
+- SHAP value scatter plots (beeswarm)</p>
+<p><strong>Summary Plots</strong> (<code>modeling_results/model_performance/</code>):
+- SHAP beeswarm plots across all runs
+- ROC curve comparisons across feature selection cutoffs
+- Precision-Recall curve comparisons
+- Hit rate and hit ratio curves</p>
+<p>Example visualizations from the original README:</p>
+<p><img alt="SHAP Summary" src="images/cutoff_5_shap_beeswarm.png" />
+<em>SHAP feature importance summary</em></p>
+<p><img alt="ROC Curves" src="images/roc_curve.png" /><br />
+<em>ROC curves comparing different feature selection cutoffs</em></p>
+<p><img alt="Precision-Recall" src="images/pr_curve.png" />
+<em>Precision-Recall curves</em></p>
+<p><img alt="Hit Rate" src="images/hit_rate_curve.png" />
+<em>Hit rate analysis</em></p>
+<p><img alt="Hit Ratio" src="images/hit_ratio_curve.png" />
+<em>Hit ratio analysis</em></p>
+<h2 id="output-directory-structure">Output Directory Structure</h2>
+<h3 id="protein-family-workflow">Protein Family Workflow</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">output_dir</span><span class="o">/</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">clustering</span><span class="o">/</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">strain_db</span><span class="o">/</span><span class="w">              </span><span class="p">#</span><span class="w"> </span><span class="n">MMseqs2</span><span class="w"> </span><span class="n">database</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">strain_clusters</span><span class="p">.</span><span class="n">tsv</span><span class="w">     </span><span class="p">#</span><span class="w"> </span><span class="n">Cluster</span><span class="w"> </span><span class="n">assignments</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">phage_db</span><span class="o">/</span><span class="w">               </span><span class="p">#</span><span class="w"> </span><span class="n">Phage</span><span class="w"> </span><span class="n">database</span><span class="w"> </span><span class="p">(</span><span class="n">optional</span><span class="p">)</span>
+<span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="n">phage_clusters</span><span class="p">.</span><span class="n">tsv</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">feature_tables</span><span class="o">/</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">strain_feature_table</span><span class="p">.</span><span class="n">csv</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">phage_feature_table</span><span class="p">.</span><span class="n">csv</span><span class="w">  </span><span class="p">#</span><span class="w"> </span><span class="n">If</span><span class="w"> </span><span class="n">phages</span><span class="w"> </span><span class="n">provided</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">merged_feature_table</span><span class="p">.</span><span class="n">csv</span>
+<span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="n">feature_map</span><span class="p">.</span><span class="n">csv</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">feature_selection</span><span class="o">/</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">selected_features</span><span class="o">/</span>
+<span class="err">│</span><span class="w">   </span><span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">run_1_selected_features</span><span class="p">.</span><span class="n">csv</span>
+<span class="err">│</span><span class="w">   </span><span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="p">...</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">feature_occurrence_counts</span><span class="p">.</span><span class="n">csv</span>
+<span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="n">filtered_feature_tables</span><span class="o">/</span>
+<span class="err">│</span><span class="w">       </span><span class="err">├──</span><span class="w"> </span><span class="n">cutoff_5_feature_table</span><span class="p">.</span><span class="n">csv</span>
+<span class="err">│</span><span class="w">       </span><span class="err">├──</span><span class="w"> </span><span class="n">cutoff_10_feature_table</span><span class="p">.</span><span class="n">csv</span>
+<span class="err">│</span><span class="w">       </span><span class="err">└──</span><span class="w"> </span><span class="p">...</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">modeling_results</span><span class="o">/</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">cutoff_5</span><span class="o">/</span>
+<span class="err">│</span><span class="w">   </span><span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">run_1</span><span class="o">/</span><span class="p">,</span><span class="w"> </span><span class="n">run_2</span><span class="o">/</span><span class="p">,</span><span class="w"> </span><span class="p">...</span>
+<span class="err">│</span><span class="w">   </span><span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="n">cutoff_5_combined_performance</span><span class="p">.</span><span class="n">csv</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">cutoff_10</span><span class="o">/</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">model_performance</span><span class="o">/</span>
+<span class="err">│</span><span class="w">   </span><span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">shap_summary_plots</span><span class="o">/</span>
+<span class="err">│</span><span class="w">   </span><span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">roc_curve</span><span class="p">.</span><span class="n">png</span>
+<span class="err">│</span><span class="w">   </span><span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">pr_curve</span><span class="p">.</span><span class="n">png</span>
+<span class="err">│</span><span class="w">   </span><span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="n">performance_comparison</span><span class="p">.</span><span class="n">csv</span>
+<span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="n">models</span><span class="o">/</span>
+<span class="err">│</span><span class="w">       </span><span class="err">├──</span><span class="w"> </span><span class="n">run_1</span><span class="o">/</span><span class="n">best_model</span><span class="p">.</span><span class="n">pkl</span>
+<span class="err">│</span><span class="w">       </span><span class="err">└──</span><span class="w"> </span><span class="p">...</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">predictions</span><span class="o">/</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">predicted_interactions</span><span class="p">.</span><span class="n">csv</span>
+<span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="n">prediction_confidence</span><span class="p">.</span><span class="n">csv</span>
+<span class="err">└──</span><span class="w"> </span><span class="n">workflow_report</span><span class="p">.</span><span class="n">txt</span>
+</code></pre></div>
+
+<h3 id="k-mer-workflow"><em>K</em>-mer Workflow</h3>
+<div class="codehilite"><pre><span></span><code>output_dir/
+├── clustering/                  # Protein family clustering
+├── kmer_tables/
+│   ├── kmer_feature_table.csv
+│   ├── feature_map.csv
+│   ├── filtered_kmers.csv
+│   ├── feature2cluster.csv
+│   └── aa_sequences.faa
+├── feature_selection/
+├── modeling_results/
+└── kmer_workflow_report.txt
+</code></pre></div>
+
+<h2 id="python-api">Python API</h2>
+<p>GenoPHI can also be used programmatically:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span> <span class="nn">genophi.workflows</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">run_protein_family_workflow</span><span class="p">,</span>
+    <span class="n">run_kmer_workflow</span><span class="p">,</span>
+    <span class="n">run_modeling_workflow_from_feature_table</span><span class="p">,</span>
+    <span class="n">assign_predict_workflow</span>
+<span class="p">)</span>
+
+<span class="c1"># Recommended: Protein family workflow</span>
+<span class="n">run_protein_family_workflow</span><span class="p">(</span>
+    <span class="n">input_path_strain</span><span class="o">=</span><span class="s2">&quot;strain_fastas/&quot;</span><span class="p">,</span>
+    <span class="n">input_path_phage</span><span class="o">=</span><span class="s2">&quot;phage_fastas/&quot;</span><span class="p">,</span>
+    <span class="n">phenotype_matrix</span><span class="o">=</span><span class="s2">&quot;interactions.csv&quot;</span><span class="p">,</span>
+    <span class="n">output_dir</span><span class="o">=</span><span class="s2">&quot;results/&quot;</span><span class="p">,</span>
+    <span class="n">threads</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+    <span class="n">num_features</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">num_runs_fs</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">num_runs_modeling</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">method</span><span class="o">=</span><span class="s1">&#39;rfe&#39;</span><span class="p">,</span>
+    <span class="n">filter_type</span><span class="o">=</span><span class="s1">&#39;strain&#39;</span>
+<span class="p">)</span>
+
+<span class="c1"># _K_-mer workflow</span>
+<span class="n">run_kmer_workflow</span><span class="p">(</span>
+    <span class="n">input_strain_dir</span><span class="o">=</span><span class="s2">&quot;strain_fastas/&quot;</span><span class="p">,</span>
+    <span class="n">input_phage_dir</span><span class="o">=</span><span class="s2">&quot;phage_fastas/&quot;</span><span class="p">,</span>
+    <span class="n">phenotype_matrix</span><span class="o">=</span><span class="s2">&quot;interactions.csv&quot;</span><span class="p">,</span>
+    <span class="n">output_dir</span><span class="o">=</span><span class="s2">&quot;kmer_results/&quot;</span><span class="p">,</span>
+    <span class="n">k</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">threads</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+    <span class="n">num_features</span><span class="o">=</span><span class="mi">100</span>
+<span class="p">)</span>
+
+<span class="c1"># Feature selection and modeling from any feature table</span>
+<span class="n">run_modeling_workflow_from_feature_table</span><span class="p">(</span>
+    <span class="n">full_feature_table</span><span class="o">=</span><span class="s2">&quot;custom_features.csv&quot;</span><span class="p">,</span>
+    <span class="n">output_dir</span><span class="o">=</span><span class="s2">&quot;modeling_results/&quot;</span><span class="p">,</span>
+    <span class="n">phenotype_column</span><span class="o">=</span><span class="s2">&quot;your_phenotype&quot;</span><span class="p">,</span>
+    <span class="n">sample_column</span><span class="o">=</span><span class="s2">&quot;your_sample_id&quot;</span><span class="p">,</span>
+    <span class="n">num_features</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">num_runs_fs</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">num_runs_modeling</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">method</span><span class="o">=</span><span class="s1">&#39;rfe&#39;</span>
+<span class="p">)</span>
+
+<span class="c1"># Prediction workflow</span>
+<span class="n">assign_predict_workflow</span><span class="p">(</span>
+    <span class="n">input_dir</span><span class="o">=</span><span class="s2">&quot;new_genomes/&quot;</span><span class="p">,</span>
+    <span class="n">mmseqs_db</span><span class="o">=</span><span class="s2">&quot;results/tmp/strain/mmseqs_db&quot;</span><span class="p">,</span>
+    <span class="n">clusters_tsv</span><span class="o">=</span><span class="s2">&quot;results/strain/clusters.tsv&quot;</span><span class="p">,</span>
+    <span class="n">feature_map</span><span class="o">=</span><span class="s2">&quot;results/strain/features/selected_features.csv&quot;</span><span class="p">,</span>
+    <span class="n">model_dir</span><span class="o">=</span><span class="s2">&quot;results/modeling_results/cutoff_*&quot;</span><span class="p">,</span>
+    <span class="n">output_dir</span><span class="o">=</span><span class="s2">&quot;predictions/&quot;</span><span class="p">,</span>
+    <span class="n">genome_type</span><span class="o">=</span><span class="s1">&#39;strain&#39;</span><span class="p">,</span>
+    <span class="n">phage_feature_table_path</span><span class="o">=</span><span class="s2">&quot;results/phage/features/feature_table.csv&quot;</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h2 id="advanced-usage">Advanced Usage</h2>
+<h3 id="custom-train-test-splits">Custom Train-Test Splits</h3>
+<p>Control how data is split for model evaluation:</p>
+<div class="codehilite"><pre><span></span><code>--filter_type<span class="w"> </span>none<span class="w">      </span><span class="c1"># Random split</span>
+--filter_type<span class="w"> </span>strain<span class="w">    </span><span class="c1"># Leave-strain-out (test on new strains)</span>
+--filter_type<span class="w"> </span>phage<span class="w">     </span><span class="c1"># Leave-phage-out (test on new phages)</span>
+</code></pre></div>
+
+<p><strong>Recommendation</strong>: Use <code>--filter_type strain</code> for phage-host predictions to evaluate generalization to new strains.</p>
+<h3 id="hyperparameter-tuning">Hyperparameter Tuning</h3>
+<p>Models use grid search for hyperparameter optimization. Default parameters are optimized for phage-host interaction prediction but can be customized in the code.</p>
+<h3 id="handling-large-datasets">Handling Large Datasets</h3>
+<p>For large datasets, adjust memory and threading:</p>
+<div class="codehilite"><pre><span></span><code>--max_ram<span class="w"> </span><span class="m">64</span><span class="w"> </span><span class="se">\ </span><span class="w">          </span><span class="c1"># Maximum RAM in GB</span>
+--threads<span class="w"> </span><span class="m">16</span><span class="w"> </span><span class="se">\ </span><span class="w">          </span><span class="c1"># Number of CPU threads</span>
+--clear_tmp<span class="w">              </span><span class="c1"># Remove temporary files after completion</span>
+</code></pre></div>
+
+<h3 id="regression-tasks">Regression Tasks</h3>
+<p>For continuous phenotypes:</p>
+<div class="codehilite"><pre><span></span><code>--task_type<span class="w"> </span>regression<span class="w"> </span><span class="se">\</span>
+--phenotype_column<span class="w"> </span>efficiency
+</code></pre></div>
+
+<p>GenoPHI will use appropriate regression metrics (RMSE, MAE, R²) instead of classification metrics.</p>
+<h3 id="pre-processing-feature-clustering">Pre-processing Feature Clustering</h3>
+<p>Filter features by cluster presence before modeling:</p>
+<div class="codehilite"><pre><span></span><code>--use_feature_clustering<span class="w"> </span><span class="se">\</span>
+--feature_cluster_method<span class="w"> </span>hierarchical<span class="w"> </span><span class="se">\</span>
+--feature_n_clusters<span class="w"> </span><span class="m">20</span><span class="w"> </span><span class="se">\</span>
+--feature_min_cluster_presence<span class="w"> </span><span class="m">2</span>
+</code></pre></div>
+
+<p>This removes features that appear in fewer than <code>feature_min_cluster_presence</code> genome clusters.</p>
+<h2 id="example-datasets">Example Datasets</h2>
+<p>To help you get started, we recommend testing GenoPHI with:</p>
+<h3 id="test-dataset-structure">Test Dataset Structure</h3>
+<p>Minimal test case with 10 strains, 5 phages:</p>
+<div class="codehilite"><pre><span></span><code>test_data/
+├── strains/
+│   ├── Strain_001.faa
+│   ├── Strain_002.faa
+│   └── ...
+├── phages/
+│   ├── Phage_A.faa
+│   ├── Phage_B.faa
+│   └── ...
+└── interactions.csv
+</code></pre></div>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="common-issues">Common Issues</h3>
+<p><strong>Issue</strong>: MMseqs2 not found</p>
+<div class="codehilite"><pre><span></span><code><span class="n">Solution</span><span class="o">:</span><span class="w"> </span><span class="n">Ensure</span><span class="w"> </span><span class="n">MMseqs2</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="n">installed</span><span class="w"> </span><span class="n">and</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">your</span><span class="w"> </span><span class="n">PATH</span>
+<span class="n">conda</span><span class="w"> </span><span class="n">install</span><span class="w"> </span><span class="o">-</span><span class="n">c</span><span class="w"> </span><span class="n">bioconda</span><span class="w"> </span><span class="n">mmseqs2</span>
+<span class="n">which</span><span class="w"> </span><span class="n">mmseqs</span><span class="w">  </span><span class="err">#</span><span class="w"> </span><span class="n">Should</span><span class="w"> </span><span class="n">show</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">path</span>
+</code></pre></div>
+
+<p><strong>Issue</strong>: Out of memory errors</p>
+<div class="codehilite"><pre><span></span><code>Solution: 
+- Reduce --max_ram parameter
+- Process fewer genomes at once
+- Use --clear_tmp to remove intermediate files
+- Increase system swap space
+</code></pre></div>
+
+<p><strong>Issue</strong>: Duplicate protein IDs</p>
+<div class="codehilite"><pre><span></span><code><span class="n">Solution</span><span class="o">:</span><span class="w"> </span><span class="n">GenoPHI</span><span class="w"> </span><span class="n">automatically</span><span class="w"> </span><span class="n">detects</span><span class="w"> </span><span class="n">and</span><span class="w"> </span><span class="n">prefixes</span><span class="w"> </span><span class="n">duplicates</span><span class="w"> </span><span class="k">with</span><span class="w"> </span><span class="n">genome</span><span class="w"> </span><span class="n">names</span>
+<span class="n">If</span><span class="w"> </span><span class="n">you</span><span class="w"> </span><span class="n">want</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">prevent</span><span class="w"> </span><span class="k">this</span><span class="o">,</span><span class="w"> </span><span class="n">ensure</span><span class="w"> </span><span class="n">protein</span><span class="w"> </span><span class="n">IDs</span><span class="w"> </span><span class="n">are</span><span class="w"> </span><span class="n">unique</span><span class="w"> </span><span class="n">across</span><span class="w"> </span><span class="n">all</span><span class="w"> </span><span class="n">input</span><span class="w"> </span><span class="n">files</span>
+</code></pre></div>
+
+<p><strong>Issue</strong>: No predictive features found</p>
+<div class="codehilite"><pre><span></span><code><span class="nx">Solution</span><span class="p">:</span><span class="w"> </span>
+<span class="o">-</span><span class="w"> </span><span class="nx">Try</span><span class="w"> </span><span class="nx">different</span><span class="w"> </span><span class="nx">feature</span><span class="w"> </span><span class="nx">selection</span><span class="w"> </span><span class="nx">methods</span><span class="w"> </span><span class="p">(</span><span class="o">--</span><span class="nx">method</span><span class="p">)</span>
+<span class="o">-</span><span class="w"> </span><span class="nx">Adjust</span><span class="w"> </span><span class="nx">num_features</span><span class="w"> </span><span class="nx">parameter</span>
+<span class="o">-</span><span class="w"> </span><span class="nx">Check</span><span class="w"> </span><span class="nx">that</span><span class="w"> </span><span class="nx">phenotype</span><span class="w"> </span><span class="nx">matrix</span><span class="w"> </span><span class="nx">has</span><span class="w"> </span><span class="nx">sufficient</span><span class="w"> </span><span class="nx">positive</span><span class="o">/</span><span class="nx">negative</span><span class="w"> </span><span class="nx">examples</span>
+<span class="o">-</span><span class="w"> </span><span class="nx">Verify</span><span class="w"> </span><span class="nx">that</span><span class="w"> </span><span class="nx">interaction</span><span class="w"> </span><span class="nx">matrix</span><span class="w"> </span><span class="nx">matches</span><span class="w"> </span><span class="nx">genome</span><span class="w"> </span><span class="nx">filenames</span>
+</code></pre></div>
+
+<p><strong>Issue</strong>: Poor model performance</p>
+<div class="codehilite"><pre><span></span><code><span class="nx">Solution</span><span class="p">:</span><span class="w"> </span>
+<span class="o">-</span><span class="w"> </span><span class="nx">Increase</span><span class="w"> </span><span class="nx">num_runs_fs</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="nx">num_runs_modeling</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nx">more</span><span class="w"> </span><span class="nx">robust</span><span class="w"> </span><span class="nx">results</span>
+<span class="o">-</span><span class="w"> </span><span class="nx">Try</span><span class="w"> </span><span class="nx">different</span><span class="w"> </span><span class="nx">feature</span><span class="w"> </span><span class="nx">selection</span><span class="w"> </span><span class="nx">methods</span>
+<span class="o">-</span><span class="w"> </span><span class="nx">Use</span><span class="w"> </span><span class="o">--</span><span class="nx">use_dynamic_weights</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nx">imbalanced</span><span class="w"> </span><span class="nx">features</span>
+<span class="o">-</span><span class="w"> </span><span class="nx">Enable</span><span class="w"> </span><span class="o">--</span><span class="nx">use_clustering</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nx">feature</span><span class="w"> </span><span class="nx">grouping</span>
+<span class="o">-</span><span class="w"> </span><span class="nx">Check</span><span class="w"> </span><span class="nx">data</span><span class="w"> </span><span class="nx">quality</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="nx">ensure</span><span class="w"> </span><span class="nx">phenotype</span><span class="w"> </span><span class="nx">matrix</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="nx">correct</span>
+<span class="o">-</span><span class="w"> </span><span class="nx">Try</span><span class="w"> </span><span class="nx">different</span><span class="w"> </span><span class="nx">clustering</span><span class="w"> </span><span class="nx">parameters</span><span class="w"> </span><span class="p">(</span><span class="nx">min_seq_id</span><span class="p">,</span><span class="w"> </span><span class="nx">coverage</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Issue</strong>: Models take too long to train</p>
+<div class="codehilite"><pre><span></span><code>Solution:
+- Reduce num_runs_modeling
+- Reduce num_features
+- Increase --threads parameter
+- Use faster feature selection methods (select_k_best, chi_squared)
+</code></pre></div>
+
+<h2 id="frequently-asked-questions-faq">Frequently Asked Questions (FAQ)</h2>
+<h3 id="general-questions">General Questions</h3>
+<p><strong>Q: Can GenoPHI be used for organisms other than phages and bacteria?</strong><br />
+A: Yes! While designed for phage-host interactions, GenoPHI works with any protein sequences and phenotypes. It's been applied to bacteria, archaea, and eukaryotic microbes.</p>
+<p><strong>Q: How many genomes do I need for reliable predictions?</strong><br />
+A: Minimum: ~20 strains and 20 phages with ~400 interactions. Recommended: 50+ strains, 50+ phages, 5000+ interactions for robust models.</p>
+<p><strong>Q: What file formats are required?</strong><br />
+A: FASTA files (.faa) for protein sequences and CSV for phenotype matrices. See <a href="#input-data-formats">Input Data Formats</a> for details.</p>
+<h3 id="technical-questions">Technical Questions</h3>
+<p><strong>Q: What's the difference between protein family and <em>k</em>-mer approaches?</strong><br />
+A: Protein families group similar full-length proteins (interpretable, captures protein-level patterns). <em>K</em>-mers analyze short amino acid sequences (high resolution, captures local patterns). The <code>full-workflow</code> combines both by extracting <em>k</em>-mers from predictive protein families.</p>
+<p><strong>Q: Should I use single-strain or phage-host mode?</strong><br />
+A: Use phage-host mode for interaction prediction. Use single-strain mode for strain-level phenotypes (resistance, growth rate, etc.) where phage data isn't relevant.</p>
+<p><strong>Q: Which feature selection method should I use?</strong><br />
+A: Start with RFE (balanced performance). Try SHAP for interpretability or SelectKBest for speed. Compare multiple methods for best results.</p>
+<p><strong>Q: How do I interpret SHAP plots?</strong><br />
+A: SHAP beeswarm plots show feature importance. Features at the top are most important. Red dots = high feature values, blue = low. Position right of center = positive impact on prediction.</p>
+<p><strong>Q: Can I use custom features instead of protein families?</strong><br />
+A: Yes! Use <code>select-and-train</code> with any feature table containing a phenotype column (metabolic pathways, gene presence/absence, etc.).</p>
+<p><strong>Q: How do I handle imbalanced datasets?</strong><br />
+A: Use <code>--use_dynamic_weights</code> with <code>--weights_method inverse_frequency</code> to balance feature importance. CatBoost also has built-in class balancing.</p>
+<h3 id="troubleshooting-questions">Troubleshooting Questions</h3>
+<p><strong>Q: Models perform poorly - what should I try?</strong><br />
+A: (1) Increase num_runs for more robust estimates, (2) Try different clustering parameters, (3) Enable dynamic weighting, (4) Check data quality and phenotype matrix accuracy.</p>
+<p><strong>Q: How much RAM do I need?</strong><br />
+A: Minimum 8 GB. Recommend 16+ GB for 50+ genomes, 32+ GB for 100+ genomes. Use <code>--max_ram</code> to limit memory usage.</p>
+<h2 id="best-practices">Best Practices</h2>
+<ol>
+<li><strong>Start with recommended defaults</strong> for initial analysis</li>
+<li><strong>Use <code>--filter_type strain</code></strong> for phage-host predictions to evaluate generalization</li>
+<li><strong>Run multiple iterations</strong> (<code>num_runs_fs = 25</code>, <code>num_runs_modeling = 50</code>) for robust results</li>
+<li><strong>Enable clustering</strong> (<code>--use_clustering</code>) for correlated features</li>
+<li><strong>Check data quality</strong> before modeling - ensure phenotype matrix matches genome filenames</li>
+<li><strong>Use SHAP plots</strong> to understand which features drive predictions</li>
+<li><strong>Compare multiple feature selection methods</strong> to find optimal features</li>
+<li><strong>For large datasets</strong>, start with a subset to optimize parameters</li>
+</ol>
+<h2 id="version-history">Version History</h2>
+<h3 id="v010-current">v0.1.0 (Current)</h3>
+<ul>
+<li>Initial release</li>
+<li>Protein family-based workflow with MMseqs2 clustering</li>
+<li><em>K</em>-mer-based workflow with flexible <em>k</em>-mer lengths</li>
+<li>Multiple feature selection methods (RFE, SHAP, SelectKBest, Chi-squared, Lasso)</li>
+<li>CatBoost model training with hyperparameter optimization</li>
+<li>SHAP-based interpretability</li>
+<li>Support for classification and regression tasks</li>
+<li>Single-strain and phage-host prediction modes</li>
+<li>Unified CLI with 12 commands</li>
+<li>Comprehensive visualization outputs</li>
+</ul>
+<h3 id="upcoming-features">Upcoming Features</h3>
+<ul>
+<li>Web interface for prediction and visualization</li>
+<li>Docker container for easy deployment</li>
+</ul>
+<h2 id="publication-datasets">Publication Datasets</h2>
+<p>The datasets used in the GenoPHI publication are included in the <code>data/</code> directory for reproducibility and benchmarking purposes.</p>
+<div class="codehilite"><pre><span></span><code><span class="nv">data</span><span class="o">/</span>
+├──<span class="w"> </span><span class="nv">experimental_validation</span><span class="o">/</span>
+│<span class="w">   </span>├──<span class="w"> </span><span class="nv">BASEL_ECOR_interaction_matrix</span>.<span class="nv">csv</span><span class="w">    </span>#<span class="w"> </span><span class="nv">BASEL</span><span class="w"> </span><span class="nv">collection</span><span class="w"> </span><span class="nv">against</span><span class="w"> </span><span class="nv">ECOR</span><span class="w"> </span><span class="nv">strains</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nv">model</span><span class="w"> </span><span class="nv">validation</span>
+│<span class="w">   </span>└──<span class="w"> </span><span class="nv">ECOR27_TnSeq_high_fitness_genes</span>.<span class="nv">csv</span><span class="w">  </span>#<span class="w"> </span><span class="nv">Filtered</span><span class="w"> </span><span class="nv">RB</span><span class="o">-</span><span class="nv">TnSeq</span><span class="w"> </span><span class="nv">results</span>
+└──<span class="w"> </span><span class="nv">interaction_matrices</span><span class="o">/</span>
+<span class="w">    </span>├──<span class="w"> </span><span class="nv">ecoli_interaction_matrix</span>.<span class="nv">csv</span><span class="w">          </span>#<span class="w"> </span><span class="nv">E</span>.<span class="w"> </span><span class="nv">coli</span><span class="w"> </span><span class="nv">phage</span><span class="o">-</span><span class="nv">host</span><span class="w"> </span><span class="nv">interactions</span>
+<span class="w">    </span>├──<span class="w"> </span><span class="nv">ecoli_interaction_matrix_subset</span>.<span class="nv">csv</span><span class="w">   </span>#<span class="w"> </span><span class="nv">Smaller</span><span class="w"> </span><span class="nv">E</span>.<span class="w"> </span><span class="nv">coli</span><span class="w"> </span><span class="nv">subset</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nv">testing</span>
+<span class="w">    </span>├──<span class="w"> </span><span class="nv">klebsiella1_interaction_matrix</span>.<span class="nv">csv</span><span class="w">    </span>#<span class="w"> </span><span class="nv">Klebsiella</span><span class="w"> </span><span class="nv">dataset</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">    </span>├──<span class="w"> </span><span class="nv">klebsiella2_interaction_matrix</span>.<span class="nv">csv</span><span class="w">    </span>#<span class="w"> </span><span class="nv">Klebsiella</span><span class="w"> </span><span class="nv">dataset</span><span class="w"> </span><span class="mi">2</span>
+<span class="w">    </span>├──<span class="w"> </span><span class="nv">pseudomonas_interaction_matrix</span>.<span class="nv">csv</span><span class="w">    </span>#<span class="w"> </span><span class="nv">Pseudomonas</span><span class="w"> </span><span class="nv">interactions</span>
+<span class="w">    </span>└──<span class="w"> </span><span class="nv">vibrio_interaction_matrix</span>.<span class="nv">csv</span><span class="w">         </span>#<span class="w"> </span><span class="nv">Vibrionaceae</span><span class="w"> </span><span class="nv">interactions</span>
+</code></pre></div>
+
+<h2 id="citation">Citation</h2>
+<p>If you use GenoPHI in your research, please cite:</p>
+<div class="codehilite"><pre><span></span><code><span class="nc">@article</span><span class="p">{</span><span class="nl">noonan2025genophi</span><span class="p">,</span>
+<span class="w">  </span><span class="na">author</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{Noonan, Avery J. C. and Moriniere, Lucas and Rivera-López, Edwin O. and Patel, Krish and Pena, Melina and Svab, Madeline and Kazakov, Alexey and Deutschbauer, Adam and Dudley, Edward G. and Mutalik, Vivek K. and Arkin, Adam P.}</span><span class="p">,</span>
+<span class="w">  </span><span class="na">title</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{Phylogeny-agnostic strain-level prediction of phage-host interactions from genomes}</span><span class="p">,</span>
+<span class="w">  </span><span class="na">year</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{2025}</span><span class="p">,</span>
+<span class="w">  </span><span class="na">doi</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{10.1101/2025.11.15.688630}</span><span class="p">,</span>
+<span class="w">  </span><span class="na">publisher</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{Cold Spring Harbor Laboratory}</span><span class="p">,</span>
+<span class="w">  </span><span class="na">url</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{https://www.biorxiv.org/content/10.1101/2025.11.15.688630v1}</span><span class="p">,</span>
+<span class="w">  </span><span class="na">journal</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{bioRxiv}</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p><strong>Preprint</strong>: Noonan, A.J.C., Moriniere, L., Rivera-López, E.O., Patel, K., Pena, M., Svab, M., Kazakov, A., Deutschbauer, A., Dudley, E.G., Mutalik, V.K., &amp; Arkin, A.P. (2025). Phylogeny-agnostic strain-level prediction of phage-host interactions from genomes. <em>bioRxiv</em>. https://doi.org/10.1101/2025.11.15.688630</p>
+<h2 id="contributing">Contributing</h2>
+<p>We welcome contributions to GenoPHI! Here's how you can help:</p>
+<h3 id="ways-to-contribute">Ways to Contribute</h3>
+<ul>
+<li><strong>Report bugs</strong> or suggest features via <a href="https://github.com/Noonanav/GenoPHI/issues">GitHub Issues</a></li>
+<li><strong>Submit pull requests</strong> for bug fixes or new features</li>
+<li><strong>Improve documentation</strong> by fixing typos or adding examples</li>
+<li><strong>Share your use cases</strong> and publications using GenoPHI</li>
+<li><strong>Test on different platforms</strong> and report compatibility issues</li>
+</ul>
+<h3 id="development-guidelines">Development Guidelines</h3>
+<ol>
+<li>Fork the repository and create a feature branch</li>
+<li>Follow PEP 8 style guidelines for Python code</li>
+<li>Add tests for new functionality</li>
+<li>Update documentation as needed</li>
+<li>Submit a pull request with a clear description of changes</li>
+</ol>
+<h3 id="code-of-conduct">Code of Conduct</h3>
+<p>We are committed to providing a welcoming and inclusive environment. Please be respectful and constructive in all interactions.</p>
+<h2 id="license">License</h2>
+<p>This software is available under the MIT License. See the <a href="LICENSE">LICENSE</a> file for details.</p>
+<p>This software is subject to Lawrence Berkeley National Laboratory copyright. The U.S. Government retains certain rights as this software was developed under funding from the U.S. Department of Energy.</p>
+<h2 id="support">Support</h2>
+<p>For questions, issues, or feature requests:
+- Open an issue on <a href="https://github.com/Noonanav/GenoPHI/issues">GitHub</a>
+- Contact: Avery Noonan (averynoonan@gmail.com)</p>
+<h2 id="acknowledgments">Acknowledgments</h2>
+<p>This was completed as part of the BRaVE Phage Foundry at Lawrence Berkeley National Laboratory which is supported by the U.S. Department of Energy, Office of Science, Office of Biological &amp; Environmental Research under contract number DE-AC02-05CH11231. This work was also supported by the National Science Foundation (NSF) of the United States under grant award No. 2220735 (EDGE CMT: Predicting bacteriophage susceptibility from Escherichia coli genotype).</p>
+</body>
+</html>
