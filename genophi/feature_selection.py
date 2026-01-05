@@ -9,6 +9,40 @@ import shap
 from sklearn.model_selection import train_test_split
 from catboost import CatBoostClassifier, CatBoostRegressor
 from sklearn.metrics import accuracy_score, f1_score, matthews_corrcoef, confusion_matrix, roc_curve, auc, precision_recall_curve, average_precision_score, mean_squared_error, r2_score
+from sklearn.base import BaseEstimator
+
+# Wrapper class to make CatBoost compatible with sklearn RFE
+class CatBoostSklearnWrapper(BaseEstimator):
+    def __init__(self, catboost_model):
+        self.catboost_model = catboost_model
+        self._estimator_type = 'classifier' if isinstance(catboost_model, CatBoostClassifier) else 'regressor'
+    
+    def fit(self, X, y, **kwargs):
+        self.catboost_model.fit(X, y, **kwargs)
+        return self
+    
+    def predict(self, X):
+        return self.catboost_model.predict(X)
+    
+    def predict_proba(self, X):
+        return self.catboost_model.predict_proba(X)
+    
+    def decision_function(self, X):
+        return self.catboost_model.predict_proba(X)[:, 1]
+    
+    def get_params(self, deep=True):
+        return self.catboost_model.get_params(deep=deep)
+    
+    def set_params(self, **params):
+        self.catboost_model.set_params(**params)
+        return self
+    
+    def score(self, X, y, sample_weight=None):
+        return self.catboost_model.score(X, y, sample_weight=sample_weight)
+    
+    @property
+    def feature_importances_(self):
+        return self.catboost_model.feature_importances_
 import matplotlib.pyplot as plt
 import seaborn as sns
 import itertools
@@ -627,7 +661,7 @@ def perform_rfe(
 
     # Initialize model based on task type
     if task_type == 'classification':
-        model = CatBoostClassifier(
+        catboost_model = CatBoostClassifier(
             iterations=500,
             learning_rate=0.1,
             depth=4,
@@ -636,8 +670,9 @@ def perform_rfe(
             train_dir=os.path.join(output_dir, '..', 'catboost_info'),
             used_ram_limit=f"{max_ram}gb"  # Set the RAM limit
         )
+        model = CatBoostSklearnWrapper(catboost_model)
     elif task_type == 'regression':
-        model = CatBoostRegressor(
+        catboost_model = CatBoostRegressor(
             iterations=500,
             learning_rate=0.1,
             depth=4,
@@ -646,6 +681,7 @@ def perform_rfe(
             train_dir=os.path.join(output_dir, '..', 'catboost_info'),
             used_ram_limit=f"{max_ram}gb"  # Set the RAM limit
         )
+        model = CatBoostSklearnWrapper(catboost_model)
     else:
         raise ValueError("task_type must be 'classification' or 'regression'")
 
@@ -695,7 +731,7 @@ def shap_rfe(X_train, y_train, num_features, threads, task_type='classification'
 
     # Select the model based on task type
     if task_type == 'classification':
-        model = CatBoostClassifier(
+        catboost_model = CatBoostClassifier(
             iterations=500,
             learning_rate=0.1,
             depth=4,
@@ -703,8 +739,9 @@ def shap_rfe(X_train, y_train, num_features, threads, task_type='classification'
             thread_count=threads,
             used_ram_limit=f"{max_ram}gb"  # Set the RAM limi
         )
+        model = CatBoostSklearnWrapper(catboost_model)
     elif task_type == 'regression':
-        model = CatBoostRegressor(
+        catboost_model = CatBoostRegressor(
             iterations=500,
             learning_rate=0.1,
             depth=4,
@@ -720,8 +757,8 @@ def shap_rfe(X_train, y_train, num_features, threads, task_type='classification'
         # Train the model with current features
         model.fit(X_train[current_features], y_train)
 
-        # Calculate SHAP values
-        explainer = shap.TreeExplainer(model, approximate=True)
+        # Calculate SHAP values - need to access the underlying catboost model
+        explainer = shap.TreeExplainer(model.catboost_model, approximate=True)
         shap_values = explainer.shap_values(X_train[current_features])
         
         # Calculate mean absolute SHAP values for each feature
